@@ -31,6 +31,10 @@ pub(crate) fn shadow_sources(
 }
 
 /// Draws resident terrain intersecting a light-space cascade, including offscreen casters.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Draw submission keeps the view, region and two geometry pipelines explicit."
+)]
 pub(crate) fn draw_shadow_geometry<'w>(
     world: &'w World,
     view: Entity,
@@ -54,6 +58,10 @@ pub(crate) fn draw_shadow_geometry<'w>(
 }
 
 /// Resident terrain inside one point-light shadow face, including offscreen casters.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Draw submission keeps the view, region and two geometry pipelines explicit."
+)]
 pub(crate) fn draw_local_light_geometry<'w>(
     world: &'w World,
     view: Entity,
@@ -98,6 +106,10 @@ pub(crate) fn draw_depth_geometry<'w>(
     );
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Draw submission keeps the view, region and two geometry pipelines explicit."
+)]
 fn draw_geometry<'w>(
     world: &'w World,
     view: Entity,
@@ -164,6 +176,14 @@ fn draw_batch_commands<'w>(
     }
 }
 
+/// Uses the terrain visibility envelope for waving and overhanging models.
+fn chunk_bounds(allocation: &GpuChunkAllocation) -> (Vec3, Vec3) {
+    let origin = queue::chunk_origin(allocation.key);
+    let aabb = crate::chunk::bounds::aabb(true);
+    let center = Vec3::from_array(origin.map(|value| value as f32)) + Vec3::from(aabb.center);
+    (center, Vec3::from(aabb.half_extents))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -199,12 +219,4 @@ mod tests {
             "shadow cascade retains the displaced overhang"
         );
     }
-}
-
-/// Uses the terrain visibility envelope for waving and overhanging models.
-fn chunk_bounds(allocation: &GpuChunkAllocation) -> (Vec3, Vec3) {
-    let origin = queue::chunk_origin(allocation.key);
-    let aabb = crate::chunk::bounds::aabb(true);
-    let center = Vec3::from_array(origin.map(|value| value as f32)) + Vec3::from(aabb.center);
-    (center, Vec3::from(aabb.half_extents))
 }

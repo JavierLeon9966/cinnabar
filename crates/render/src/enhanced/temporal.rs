@@ -147,6 +147,10 @@ impl HistoryState {
     }
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "History compatibility compares both camera poses and frame continuity inputs."
+)]
 fn history_compatible(
     old: Vec3,
     new: Vec3,

@@ -25,9 +25,9 @@ fn water_scattering_requires_incident_light_and_preserves_zero_path() {
         assert!((actual - expected).abs() < 0.00001);
     }
     assert!(values[2][0] < values[2][1] && values[2][1] < values[2][2]);
-    for channel in 0..3 {
-        assert!(values[3][channel].is_finite() && values[3][channel] > 0.0);
-        assert!((values[4][channel] * 100.0 - values[3][channel]).abs() < 0.00001);
+    for (bright, dim) in values[3][..3].iter().zip(&values[4][..3]) {
+        assert!(bright.is_finite() && *bright > 0.0);
+        assert!((dim * 100.0 - bright).abs() < 0.00001);
     }
 }
 

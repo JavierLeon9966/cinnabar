@@ -133,6 +133,10 @@ impl IndirectGridGpu {
         }
     }
 
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Probe preparation keeps independently cached geometry and lighting inputs explicit."
+    )]
     pub fn prepare(
         &mut self,
         queue: &RenderQueue,

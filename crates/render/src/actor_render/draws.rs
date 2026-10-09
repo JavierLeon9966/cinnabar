@@ -12,27 +12,6 @@ pub(super) fn main_span(mut span: ActorDrawSpan, main_count: u32) -> Option<Acto
     Some(span)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn camera_spans_exclude_shadow_tail_without_changing_geometry_coverage() {
-        let span = ActorDrawSpan {
-            material: 0,
-            page: 2,
-            first: 3,
-            count: 5,
-            vertex_count: 72,
-        };
-        let clipped = main_span(span, 5).unwrap();
-        assert_eq!(clipped, ActorDrawSpan { count: 2, ..span });
-        assert_eq!(main_span(span, 8), Some(span));
-        assert!(main_span(ActorDrawSpan { first: 5, ..span }, 5).is_none());
-        assert!(main_span(span, 0).is_none());
-    }
-}
-
 #[cfg(feature = "enhanced")]
 fn prepared_spans(
     gpu: &ActorGpu,
@@ -140,4 +119,25 @@ pub(crate) fn draw_depth_actors<'w>(
     draw_prepared_actors(gpu, view_offset, pass, false, |span| {
         super::motion::record_coverage(world, span.first, span.count);
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn camera_spans_exclude_shadow_tail_without_changing_geometry_coverage() {
+        let span = ActorDrawSpan {
+            material: 0,
+            page: 2,
+            first: 3,
+            count: 5,
+            vertex_count: 72,
+        };
+        let clipped = main_span(span, 5).unwrap();
+        assert_eq!(clipped, ActorDrawSpan { count: 2, ..span });
+        assert_eq!(main_span(span, 8), Some(span));
+        assert!(main_span(ActorDrawSpan { first: 5, ..span }, 5).is_none());
+        assert!(main_span(span, 0).is_none());
+    }
 }

@@ -361,13 +361,12 @@ fn cloud_radiance_uses_continuous_solar_and_lunar_irradiance_through_twilight() 
         return;
     };
     assert!(luminance(values[0]) > 0.0);
-    for channel in 0..3 {
+    for (channel, noon) in values[0][..3].iter().enumerate() {
         assert!(
-            (values[1][channel] - values[0][channel]).abs()
-                < values[0][channel].max(0.0001) * 0.001,
+            (values[1][channel] - noon).abs() < noon.max(0.0001) * 0.001,
             "the selected terrain shadow source cannot extinguish independent celestial irradiance"
         );
-        let interpolated = values[0][channel] * 0.5;
+        let interpolated = noon * 0.5;
         assert!(
             (values[4][channel] - interpolated).abs() < interpolated.max(0.0001) * 0.001,
             "cloud radiance scales with the shared celestial irradiance sources"

@@ -686,10 +686,11 @@ pub(crate) fn load_runtime_assets_timed(
     })
 }
 
+/// Decoded world assets, their hash and optional texture material keys.
+type WorldCarrier = (Arc<RuntimeAssets>, String, Option<assets::MaterialKeys>);
+
 /// The decoded world carrier and its SHA-256, or `None` when it is absent.
-fn load_world_carrier(
-    path: &Path,
-) -> Result<Option<(Arc<RuntimeAssets>, String, Option<assets::MaterialKeys>)>, AssetStartupError> {
+fn load_world_carrier(path: &Path) -> Result<Option<WorldCarrier>, AssetStartupError> {
     let file = match File::open(path) {
         Ok(file) => file,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),

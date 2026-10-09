@@ -126,8 +126,10 @@ pub(super) fn palette(textures: &ChunkTextureAssets, output: &mut Vec<Reflectanc
             .mips
             .last()
             .and_then(|mip| mip.rgba8.get(layer * 4..layer * 4 + 4));
-        let mut result = Reflectance::default();
-        result.flags = material.flags;
+        let mut result = Reflectance {
+            flags: material.flags,
+            ..Default::default()
+        };
         if let Some(rgba) = rgba {
             result.rgb = Vec3::from_array([linear(rgba[0]), linear(rgba[1]), linear(rgba[2])]);
             result.opacity = if material.flags
@@ -382,6 +384,10 @@ fn surface(
     }
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Geometry rebuilding consumes separate resident streams and reusable outputs."
+)]
 pub(super) fn rebuild(
     resident: &IndirectGeometry,
     coverage: &crate::chunk::ChunkResidentCoverage,

@@ -1,5 +1,14 @@
 use crate::chunk::*;
 
+/// Shared quad and model geometry with their corresponding lighting streams.
+#[cfg(feature = "enhanced")]
+pub(crate) type RetainedGeometry = (
+    Arc<[PackedQuad]>,
+    Arc<[PackedModelRef]>,
+    Arc<[PackedQuadLighting]>,
+    Arc<[PackedQuadLighting]>,
+);
+
 /// Extracted packed geometry for one visible, frustum-cullable sub-chunk.
 #[derive(Component, Clone, ExtractComponent)]
 #[extract_component_filter(Changed<ChunkRenderInstance>)]
@@ -32,14 +41,7 @@ pub struct ChunkRenderInstance {
 impl ChunkRenderInstance {
     /// Retains immutable resident geometry without copying its packed streams.
     #[cfg(feature = "enhanced")]
-    pub(crate) fn indirect_geometry(
-        &self,
-    ) -> (
-        Arc<[PackedQuad]>,
-        Arc<[PackedModelRef]>,
-        Arc<[PackedQuadLighting]>,
-        Arc<[PackedQuadLighting]>,
-    ) {
+    pub(crate) fn indirect_geometry(&self) -> RetainedGeometry {
         (
             Arc::clone(&self.cube_quads),
             Arc::clone(&self.model_refs),

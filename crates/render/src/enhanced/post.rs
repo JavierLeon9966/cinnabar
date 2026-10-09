@@ -401,16 +401,16 @@ impl ViewNode for EnhancedLightingNode {
             );
             post.atmosphere_cache.mark_sky_rendered();
         }
-        if post.atmosphere_cache.environment_needs_update() {
-            if super::probes::update_environment_sky(
+        if post.atmosphere_cache.environment_needs_update()
+            && super::probes::update_environment_sky(
                 context,
                 world,
                 &state.frame,
                 &post.sky,
                 &scene.depth_view,
-            ) {
-                post.atmosphere_cache.mark_environment_rendered();
-            }
+            )
+        {
+            post.atmosphere_cache.mark_environment_rendered();
         }
         if post.atmosphere_cache.cloud_shadow_needs_update() {
             fullscreen_pass(

@@ -254,15 +254,14 @@ pub(crate) fn load_optional_enhanced_textures(
         .collect();
     let groups = sources(runtime, keys);
     let fingerprint = cache::fingerprint(&packs, &groups);
-    if let Some(key) = fingerprint.as_ref() {
-        if let Some(mut report) = audit::load(key)
-            && let Some(cached) = cache::load(key)
-        {
-            report.source = "cached_with_provenance".to_owned();
-            report.print();
-            if let Some(cached) = cached.into_assets() {
-                return Some(Arc::new(cached));
-            }
+    if let Some(key) = fingerprint.as_ref()
+        && let Some(mut report) = audit::load(key)
+        && let Some(cached) = cache::load(key)
+    {
+        report.source = "cached_with_provenance".to_owned();
+        report.print();
+        if let Some(cached) = cached.into_assets() {
+            return Some(Arc::new(cached));
         }
     }
     let (payload, aliases) = load(groups, &packs);

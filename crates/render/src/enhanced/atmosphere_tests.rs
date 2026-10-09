@@ -361,8 +361,8 @@ fn cloud_shadow_coordinates_follow_the_same_light_ray_at_receiver_heights() {
     }
     assert!(values[1][0] < values[0][0] && values[1][1] < values[0][1]);
     assert!(values[3].iter().all(|value| value.is_finite()));
-    for channel in 0..3 {
-        assert!((values[4][channel] - values[5][channel]).abs() < 0.0001);
+    for (actual, expected) in values[4][..3].iter().zip(&values[5][..3]) {
+        assert!((actual - expected).abs() < 0.0001);
     }
     assert!((values[4][2] - 196.0).abs() < 0.0001);
 }
@@ -443,9 +443,9 @@ fn directional_light_uses_shared_sources_and_atmospheric_extinction_once() {
     let Some(values) = execute_calibrated(source, 5) else {
         return;
     };
-    for channel in 0..3 {
-        assert!((values[0][channel] - SOLAR_IRRADIANCE).abs() < 0.0001);
-        assert!(values[1][channel] > 0.0 && values[1][channel] < values[0][channel]);
+    for (channel, noon) in values[0][..3].iter().enumerate() {
+        assert!((noon - SOLAR_IRRADIANCE).abs() < 0.0001);
+        assert!(values[1][channel] > 0.0 && values[1][channel] < *noon);
         assert!((values[2][channel] / values[1][channel] - 0.5).abs() < 0.0001);
         assert!(
             (values[3][channel] / values[1][channel] - LUNAR_IRRADIANCE / SOLAR_IRRADIANCE).abs()
@@ -523,11 +523,11 @@ fn surface_transport_warms_grazing_sunlight_and_occludes_below_ground() {
     let Some(values) = execute_calibrated(source, 4) else {
         return;
     };
-    for channel in 0..3 {
-        assert!(values[0][channel] > 0.0 && values[0][channel] <= 1.0);
-        assert!(values[1][channel] < values[0][channel]);
+    for (channel, noon) in values[0][..3].iter().enumerate() {
+        assert!(*noon > 0.0 && *noon <= 1.0);
+        assert!(values[1][channel] < *noon);
         assert!(values[2][channel].abs() < 0.0001);
-        assert!(values[3][channel] < values[0][channel]);
+        assert!(values[3][channel] < *noon);
     }
     assert!(
         values[1][0] / values[1][2].max(0.0001) > values[0][0] / values[0][2].max(0.0001),

@@ -74,7 +74,11 @@ struct CaptureLighting {
 }
 
 /// Prepares uniforms and targets only for opted-in cameras.
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    clippy::type_complexity,
+    reason = "Bevy supplies the resources and component tuple owned by each view."
+)]
 pub(crate) fn prepare_enhanced_views(
     mut state: ResMut<EnhancedViews>,
     gpu: Res<EnhancedGpu>,
@@ -120,9 +124,9 @@ pub(crate) fn prepare_enhanced_views(
                         if parent_settings.reflection_capture
                             || Some(parent_view.retained_view_entity.main_entity.id())
                                 != probe_origin.source
-                            || !camera
+                            || camera
                                 .zip(parent_camera)
-                                .is_some_and(|(capture, parent)| capture.order > parent.order)
+                                .is_none_or(|(capture, parent)| capture.order <= parent.order)
                         {
                             return None;
                         }

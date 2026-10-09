@@ -153,22 +153,22 @@ pub(super) fn prepare_actor_motion(
 }
 
 pub(super) fn record_coverage(world: &World, first: u32, instances: u32) {
-    if instances > 0 {
-        if let Some(motion) = world.get_resource::<ActorMotionGpu>() {
-            motion.coverage_drawn.store(true, Ordering::Relaxed);
-            for index in first..first.saturating_add(instances) {
-                if let Some(visible) = motion.visible_instances.get(index as usize) {
-                    visible.store(true, Ordering::Relaxed);
-                }
+    if instances > 0
+        && let Some(motion) = world.get_resource::<ActorMotionGpu>()
+    {
+        motion.coverage_drawn.store(true, Ordering::Relaxed);
+        for index in first..first.saturating_add(instances) {
+            if let Some(visible) = motion.visible_instances.get(index as usize) {
+                visible.store(true, Ordering::Relaxed);
             }
         }
     }
 }
 
 pub(crate) fn mark_actor_motion_submitted(world: &World) {
-    if let Some(motion) = world.get_resource::<ActorMotionGpu>() {
-        if motion.coverage_drawn.load(Ordering::Relaxed) {
-            motion.resolved.store(true, Ordering::Relaxed);
-        }
+    if let Some(motion) = world.get_resource::<ActorMotionGpu>()
+        && motion.coverage_drawn.load(Ordering::Relaxed)
+    {
+        motion.resolved.store(true, Ordering::Relaxed);
     }
 }

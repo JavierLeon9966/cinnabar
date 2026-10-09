@@ -175,8 +175,8 @@ fn untextured_models_receive_light_without_becoming_emitters() {
         values[1][0] > 4.0,
         "ordinary models still receive incident light"
     );
-    for channel in 0..3 {
-        close(values[2][channel], 0.0);
+    for value in &values[2][..3] {
+        close(*value, 0.0);
     }
 }
 

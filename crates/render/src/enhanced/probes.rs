@@ -930,8 +930,10 @@ mod tests {
 
     #[test]
     fn stale_render_feedback_cannot_complete_a_relocated_probe() {
-        let mut origin = ProbeOrigin::default();
-        origin.epoch = 1;
+        let mut origin = ProbeOrigin {
+            epoch: 1,
+            ..Default::default()
+        };
         origin.reset_faces();
         let previous_frame = origin.clone();
         previous_frame.complete_face(3);

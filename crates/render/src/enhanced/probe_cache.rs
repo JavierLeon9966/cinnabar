@@ -146,7 +146,7 @@ mod tests {
             }
         }
         assert_eq!(faces, ALL_FACES);
-        assert!(count <= 10 && count >= 6);
+        assert!((6..=10).contains(&count));
     }
 
     #[test]
