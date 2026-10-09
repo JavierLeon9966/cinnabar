@@ -37,6 +37,7 @@ pub(crate) mod graph;
 mod graph_tests;
 #[cfg(feature = "enhanced")]
 mod hand_layer;
+#[cfg(feature = "enhanced")]
 mod indirect;
 #[cfg(feature = "enhanced")]
 mod local_lights;

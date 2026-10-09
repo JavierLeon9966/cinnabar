@@ -65,6 +65,7 @@ pub(super) fn evaluate(
         work_left: MAX_RUNTIME_POSE_WORK_PER_ACTOR_TICK,
         transitions_left: MAX_CONTROLLER_TRANSITIONS_PER_TICK,
         used: 0,
+        static_draw: None,
         stack: std::mem::take(&mut budget.stack),
     };
     body.swap_evaluator(state);
