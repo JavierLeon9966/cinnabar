@@ -291,6 +291,15 @@ pub(crate) fn light_state(atmosphere: &AtmosphereFrame) -> LightState {
     }
 }
 
+/// Applies the user's cloud preference without changing the camera's configured options.
+pub(crate) fn applied_cloud_settings(
+    mut settings: EnhancedRendering,
+    visibility: Option<&crate::CloudVisibility>,
+) -> EnhancedRendering {
+    settings.volumetric_clouds &= visibility.is_none_or(|visibility| visibility.0);
+    settings
+}
+
 /// Per-view inputs that do not come from the atmosphere frame.
 pub(crate) struct ViewInputs {
     pub(crate) clip_from_world: Mat4,

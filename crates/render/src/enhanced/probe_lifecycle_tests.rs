@@ -96,3 +96,62 @@ fn dimension_changes_discard_completed_reflections_at_the_same_coordinates() {
         );
     }
 }
+
+#[test]
+fn cloud_visibility_changes_discard_completed_reflections() {
+    let mut app = App::new();
+    app.init_resource::<Cameras>()
+        .init_resource::<ProbeOrigin>()
+        .init_resource::<Assets<Image>>()
+        .init_resource::<crate::CloudVisibility>()
+        .add_systems(Update, sync_cameras);
+    let source = app
+        .world_mut()
+        .spawn((
+            Camera::default(),
+            GlobalTransform::IDENTITY,
+            EnhancedRendering {
+                waving: false,
+                ..default()
+            },
+        ))
+        .id();
+    app.update();
+    for visible in [false, true, false] {
+        let previous = app.world().resource::<ProbeOrigin>().clone();
+        for face in 0..CUBE_FACE_COUNT {
+            previous.complete_face(face);
+        }
+        app.update();
+        assert_eq!(app.world().resource::<ProbeOrigin>().epoch, previous.epoch);
+        app.world_mut().resource_mut::<crate::CloudVisibility>().0 = visible;
+        app.update();
+        let current = app.world().resource::<ProbeOrigin>();
+        assert_ne!(
+            current.epoch, previous.epoch,
+            "cloud preference changes retire old reflection faces"
+        );
+        assert_eq!(current.face_mask(), 0);
+        previous.complete_face(0);
+        assert_eq!(
+            current.face_mask(),
+            0,
+            "old cloudy render feedback is rejected"
+        );
+        let world = app.world_mut();
+        let mut captures = world.query_filtered::<&EnhancedRendering, With<ProbeFace>>();
+        assert_eq!(captures.iter(world).count(), CUBE_FACE_COUNT as usize);
+        assert!(
+            captures
+                .iter(world)
+                .all(|settings| settings.volumetric_clouds == visible)
+        );
+        assert!(
+            world
+                .entity(source)
+                .get::<EnhancedRendering>()
+                .unwrap()
+                .volumetric_clouds
+        );
+    }
+}

@@ -120,6 +120,7 @@ fn sync_cameras(
     time: Option<Res<Time>>,
     atmosphere: Option<Res<crate::AtmosphereFrame>>,
     environment: Option<Res<crate::AtmosphereViewInputs>>,
+    clouds: Option<Res<crate::CloudVisibility>>,
     materials: Option<Res<crate::ChunkTextureAssets>>,
     actors: Option<Res<crate::ActorRenderFrame>>,
     changed_chunks: Query<(), Changed<crate::ChunkRenderInstance>>,
@@ -155,6 +156,8 @@ fn sync_cameras(
         }
         return;
     };
+    let applied = super::frame::applied_cloud_settings(*settings, clouds.as_deref());
+    let settings = &applied;
     let dimension = environment
         .as_ref()
         .map(|environment| environment.dimension);

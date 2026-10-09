@@ -52,6 +52,7 @@ pub(crate) struct LocalLightingInputs<'w> {
     scattering: Res<'w, crate::enhanced::multiple_scattering::MultipleScattering>,
     actors: Option<Res<'w, crate::ActorRenderFrame>>,
     environment: Option<Res<'w, crate::AtmosphereViewInputs>>,
+    clouds: Option<Res<'w, crate::CloudVisibility>>,
     pipelines: Res<'w, crate::enhanced::shadows::EnhancedShadowPipelines>,
 }
 
@@ -118,6 +119,9 @@ pub(crate) fn prepare_enhanced_views(
             if settings.reflection_capture != reflection_capture {
                 continue;
             }
+            let applied =
+                crate::enhanced::frame::applied_cloud_settings(*settings, local.clouds.as_deref());
+            let settings = &applied;
             let capture_lighting = if reflection_capture {
                 views.iter().find_map(
                     |(parent, parent_view, _, _, parent_settings, _, parent_camera)| {
@@ -877,6 +881,45 @@ mod tests {
             assert_eq!(render_dimension(Some(&environment)), Some(dimension));
         }
     }
+    #[test]
+    fn cloud_visibility_controls_frame_flags_and_shadow_sampling() {
+        let inputs = ViewInputs {
+            clip_from_world: Mat4::IDENTITY,
+            world_from_clip: Mat4::IDENTITY,
+            camera: Vec3::ZERO,
+            near: 0.1,
+            viewport: [1280, 720],
+            seconds: 0.0,
+        };
+        for capture in [false, true] {
+            for enabled in [false, true] {
+                let configured = EnhancedRendering {
+                    volumetric_clouds: enabled,
+                    reflection_capture: capture,
+                    ..default()
+                };
+                for visible in [
+                    None,
+                    Some(crate::CloudVisibility(false)),
+                    Some(crate::CloudVisibility(true)),
+                ] {
+                    let applied = crate::enhanced::frame::applied_cloud_settings(
+                        configured,
+                        visible.as_ref(),
+                    );
+                    let expected = enabled && visible.is_none_or(|visibility| visibility.0);
+                    let (frame, _) = build_frame(&inputs, &applied, &AtmosphereFrame::default());
+                    assert_eq!(
+                        frame.flags.x & crate::enhanced::frame::FEATURE_VOLUMETRIC_CLOUDS != 0,
+                        expected
+                    );
+                    assert_eq!(cloud_shadow_sampling_enabled(&applied, true), expected);
+                    assert_eq!(applied.reflection_capture, capture);
+                }
+            }
+        }
+    }
+
     #[test]
     fn cloud_shadow_sampling_survives_temporal_history_resets() {
         let mut settings = EnhancedRendering::default();
