@@ -6,6 +6,7 @@ use crate::chunk::*;
 #[require(VisibilityClass)]
 #[component(on_add = visibility::add_visibility_class::<ChunkRenderInstance>)]
 pub struct ChunkRenderInstance {
+    pub(in crate::chunk) light_emitters: Arc<[meshing::BlockLightEmitter]>,
     pub(in crate::chunk) key: SubChunkKey,
     pub(in crate::chunk) cube_quads: Arc<[PackedQuad]>,
     pub(in crate::chunk) cube_lighting: Arc<[PackedQuadLighting]>,
@@ -29,6 +30,25 @@ pub struct ChunkRenderInstance {
 }
 
 impl ChunkRenderInstance {
+    /// Retains immutable resident geometry without copying its packed streams.
+    pub(crate) fn indirect_geometry(
+        &self,
+    ) -> (
+        Arc<[PackedQuad]>,
+        Arc<[PackedModelRef]>,
+        Arc<[PackedQuadLighting]>,
+        Arc<[PackedQuadLighting]>,
+    ) {
+        (
+            Arc::clone(&self.cube_quads),
+            Arc::clone(&self.model_refs),
+            Arc::clone(&self.cube_lighting),
+            Arc::clone(&self.model_lighting),
+        )
+    }
+    pub fn light_emitters(&self) -> &[meshing::BlockLightEmitter] {
+        &self.light_emitters
+    }
     #[must_use]
     pub const fn key(&self) -> SubChunkKey {
         self.key
