@@ -129,7 +129,7 @@ impl ViewNode for EnhancedDepthNode {
         (entity, settings, offset): QueryItem<Self::ViewQuery>,
         world: &World,
     ) -> Result<(), NodeRunError> {
-        if !super::enhanced_rendering_enabled() || settings.reflection_capture {
+        if !render_model::enhanced_rendering_enabled() || settings.reflection_capture {
             return Ok(());
         }
         let views = world.resource::<EnhancedViews>();

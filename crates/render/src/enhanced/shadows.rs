@@ -144,7 +144,9 @@ impl ViewNode for EnhancedShadowNode {
         (entity, settings, view_offset): QueryItem<Self::ViewQuery>,
         world: &World,
     ) -> Result<(), NodeRunError> {
-        if !super::enhanced_rendering_enabled() || !settings.shadows || settings.reflection_capture
+        if !render_model::enhanced_rendering_enabled()
+            || !settings.shadows
+            || settings.reflection_capture
         {
             return Ok(());
         }

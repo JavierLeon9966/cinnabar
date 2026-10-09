@@ -583,7 +583,7 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetEnhancedViewBindGroup
         views: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        if !super::enhanced_rendering_enabled() || !enhanced {
+        if !render_model::enhanced_rendering_enabled() || !enhanced {
             return RenderCommandResult::Success;
         }
         let Some(views) = views else {

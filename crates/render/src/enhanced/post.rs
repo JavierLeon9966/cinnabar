@@ -546,7 +546,7 @@ impl ViewNode for EnhancedPostNode {
         (target, depth, settings, face, scene): QueryItem<Self::ViewQuery>,
         world: &World,
     ) -> Result<(), NodeRunError> {
-        if !super::enhanced_rendering_enabled() {
+        if !render_model::enhanced_rendering_enabled() {
             return Ok(());
         }
         super::hand_layer::clear(context, world, scene);
