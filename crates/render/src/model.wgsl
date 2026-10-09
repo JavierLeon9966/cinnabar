@@ -354,10 +354,12 @@ fn vertex(
     out.normal = template_quad_normal(template_quad_base, rotation);
 #endif
 #endif
+#ifdef ENHANCED_MOTION
+    out.normal = template_quad_normal(template_quad_base, rotation);
+#endif
     return out;
 }
 
-#ifdef ENHANCED
 // Decode a rotated model corner for its geometric normal.
 fn template_corner(template_quad_base: u32, corner: u32, transform: u32) -> vec3<f32> {
     let component = corner * 3u;
@@ -381,7 +383,6 @@ fn template_quad_normal(template_quad_base: u32, transform: u32) -> vec3<f32> {
     return normalize(face);
 }
 
-#endif
 fn tinted(sampled: vec4<f32>, flags: u32, record: u32, position: vec3<f32>, world_origin: vec3<f32>) -> vec4<f32> {
     let tint_kind = flags & 0x30u;
     if (tint_kind == 0u) { return vec4(sampled.rgb, sampled.a); }
@@ -441,12 +442,7 @@ fn sample_model_ref(in: VertexOutput, texture_ref: u32, dx: vec2<f32>, dy: vec2<
     }
     let layer = i32(texture_ref & 0x7ffu);
 #ifdef ENHANCED
-    if ((texture_ref >> 31u) == 0u) {
-        let scale = texture_gradient_scale(texture_ref, textureDimensions(block_textures_page_0, 0));
-        return textureSampleGrad(block_textures_page_0, block_sampler, texture_model_uv(texture_ref, in.uv), layer, dx * scale, dy * scale);
-    }
-    let scale = texture_gradient_scale(texture_ref, textureDimensions(block_textures_page_1, 0));
-    return textureSampleGrad(block_textures_page_1, block_sampler, texture_model_uv(texture_ref, in.uv), layer, dx * scale, dy * scale);
+    return sample_enhanced_colour(texture_ref, in.uv, dx, dy);
 #else
     if ((texture_ref >> 31u) == 0u) {
         let scale = texture_gradient_scale(texture_ref, textureDimensions(terrain_gamma_page_0, 0));
