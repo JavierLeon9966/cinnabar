@@ -223,8 +223,6 @@ use presentation::frame_probe::{
     submit_presented_frame_probe,
 };
 pub use presentation::metrics::{ModelWorkloadMetrics, TransparentSortMetrics};
-#[allow(unused_imports)]
-use presentation::model_witness::ModelWitnessEvidenceState;
 pub use presentation::model_witness::{
     ModelWitnessEvent, ModelWitnessEvidence, ModelWitnessFrameAck, ModelWitnessManifestRecord,
     ModelWitnessRequest, ModelWitnessRequestError,
