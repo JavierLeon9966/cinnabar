@@ -13,7 +13,7 @@ use std::{ffi::OsStr, fs, sync::Arc};
 
 use anyhow::{Context, Result, bail};
 use bevy::{
-    anti_alias::AntiAliasPlugin,
+    anti_alias::{AntiAliasPlugin, fxaa::FxaaPlugin, taa::TemporalAntiAliasPlugin},
     app::TerminalCtrlCHandlerPlugin,
     prelude::{
         App, ClearColor, Color, DefaultPlugins, First, IntoScheduleConfigs, Last, PluginGroup,
@@ -347,7 +347,8 @@ pub(crate) fn configure_client_runtime_frame_systems(app: &mut App) {
                 LocalPlayerFrameSet::Interaction,
             )
                 .chain()
-                .after(FlyCameraUpdateSet),
+                .after(FlyCameraUpdateSet)
+                .after(crate::render_mode::RenderModeUpdateSet),
         )
         .add_systems(
             Update,
@@ -600,6 +601,10 @@ pub fn run(args: args::ClientArgs) -> Result<()> {
     ui_presentation.set_safe_area(crate::ui_runtime::presentation::platform_safe_area_insets());
     let (atmosphere_runtime, atmosphere_identity) = loaded_assets.atmosphere.into_parts();
     let weather_textures = carriers.weather;
+    let authored_texture_loading = crate::render_mode::AuthoredTextureLoading::new(
+        Arc::clone(&loaded_assets.runtime),
+        loaded_assets.material_keys.clone(),
+    );
     let runtime_assets = loaded_assets.runtime;
     let asset_metrics = loaded_assets.metrics;
     let mut actor_render_scene = ActorRenderScene::with_runtime_entity_assets_and_equipment(
@@ -744,6 +749,8 @@ pub fn run(args: args::ClientArgs) -> Result<()> {
         .add_systems(Last, crate::frame_pacing::update_frame_pacing);
     #[cfg(target_os = "macos")]
     crate::thread_budget::ThreadBudget::configure_render_thread(&mut app);
+    app.add_plugins(FxaaPlugin);
+    app.add_plugins(TemporalAntiAliasPlugin);
     app.add_systems(Update, crate::window_icon::apply);
     app.add_plugins(crate::local_worlds::LocalWorldsPlugin);
     app.add_plugins(crate::hud_tools::HudToolsPlugin {
@@ -847,6 +854,7 @@ pub fn run(args: args::ClientArgs) -> Result<()> {
     ))
     .insert_resource(startup_biome_tints(&runtime_assets))
     .insert_resource(ChunkTextureAssets::new(runtime_assets))
+    .insert_resource(authored_texture_loading)
     .insert_resource(CaveVisibilityCache::default())
     .insert_resource(VisibilityDiagnosticsInput::new(diagnostics_enabled))
     .insert_resource(runtime_config)
