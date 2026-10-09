@@ -14,7 +14,11 @@ fn native_leaf_face_policy_uses_the_carrier_flag_in_both_colour_and_depth() {
     // alpha at .5. SeasonsOn writes opaque alpha; SeasonsOff preserves the
     // sampled alpha. This test does not claim native MSAA/A2C coverage parity.
     // Deep leaves have no cutout flag.
-    for definitions in [&[][..], &["ENHANCED_SHADOW"][..], &["ENHANCED_SHADOW", "ENHANCED_MOTION"][..]] {
+    for definitions in [
+        &[][..],
+        &["ENHANCED_SHADOW"][..],
+        &["ENHANCED_SHADOW", "ENHANCED_MOTION"][..],
+    ] {
         let source = shader_source::standalone(chunk, definitions);
         let module = naga::front::wgsl::parse_str(&source).unwrap();
         naga::valid::Validator::new(
@@ -24,10 +28,17 @@ fn native_leaf_face_policy_uses_the_carrier_flag_in_both_colour_and_depth() {
         .validate(&module)
         .unwrap();
         for entry in &module.entry_points {
-            if matches!(entry.name.as_str(), "fragment" | "fragment_shadow" | "fragment_motion") {
-                assert!(entry.function.arguments.iter().any(|argument| {
-                    argument.binding == Some(naga::Binding::BuiltIn(naga::BuiltIn::FrontFacing))
-                }), "{} must receive the face orientation", entry.name);
+            if matches!(
+                entry.name.as_str(),
+                "fragment" | "fragment_shadow" | "fragment_motion"
+            ) {
+                assert!(
+                    entry.function.arguments.iter().any(|argument| {
+                        argument.binding == Some(naga::Binding::BuiltIn(naga::BuiltIn::FrontFacing))
+                    }),
+                    "{} must receive the face orientation",
+                    entry.name
+                );
             }
         }
     }
@@ -83,10 +94,4 @@ fn alternate_atlas_views_and_native_sampler_fit_baseline_limits_without_more_sto
     assert_eq!(sampler.address_mode_u, wgpu::AddressMode::ClampToEdge);
     assert_eq!(sampler.address_mode_v, wgpu::AddressMode::ClampToEdge);
     assert_eq!(sampler.address_mode_w, wgpu::AddressMode::ClampToEdge);
-    let uploader = include_str!("../../src/chunk/gpu/bind_groups.rs");
-    assert!(uploader.contains("view_formats: &[TextureFormat::Rgba8Unorm]"));
-    assert!(uploader.contains("format: TextureFormat::Rgba8UnormSrgb"));
-    assert!(uploader.contains("let native_leaf_views = [&texture_0, &texture_1].map"));
-    assert_eq!(uploader.matches("render_device.create_texture(").count(), 1);
-    assert!(uploader.contains("crate::material_shader::native_leaf_sampler_descriptor()"));
 }

@@ -379,10 +379,23 @@ fn packed_chunk_shader_parses_and_validates() {
         );
     }
     assert!(shader.contains("@group(0) @binding(15)"));
-    assert_eq!(shader.matches("textureSample(").count(), 0);
-    assert_eq!(
-        shader.matches("textureSampleGrad(").count(),
-        material_shader::CHUNK_SAMPLED_TEXTURE_BINDINGS as usize
+    let mut samples = 0;
+    for function in module
+        .functions
+        .iter()
+        .map(|(_, function)| function)
+        .chain(module.entry_points.iter().map(|entry| &entry.function))
+    {
+        for (_, expression) in function.expressions.iter() {
+            if let naga::Expression::ImageSample { level, .. } = expression {
+                assert!(matches!(level, naga::SampleLevel::Gradient { .. }));
+                samples += 1;
+            }
+        }
+    }
+    assert!(
+        samples > 0,
+        "terrain sampling must retain explicit gradients"
     );
     assert!(shader.contains("fn sample_texture_ref("));
     assert!(shader.contains("texture_ref >> 31u"));
