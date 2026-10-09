@@ -24,8 +24,8 @@ use bevy::{
 use chunk_pipeline::WorldStream;
 use client_world::LocalPlayerFeed;
 use render::{
-    ActorMainWitness, ActorRenderScene, ActorRigFrameBuilder, ActorRigSubmission,
-    HandItemAtlas, HandRigLight, HandRigScene, MAX_ACTOR_RENDER_DISTANCE_BLOCKS, RuntimeStage,
+    ActorMainWitness, ActorRenderScene, ActorRigFrameBuilder, ActorRigSubmission, HandItemAtlas,
+    HandRigLight, HandRigScene, MAX_ACTOR_RENDER_DISTANCE_BLOCKS, RuntimeStage,
     RuntimeStageProfiler,
 };
 
@@ -594,11 +594,7 @@ pub fn prepare_actor_render_frame(
     });
     let local = if local_shadows {
         local.and_then(|local| {
-            culling::local_shadow_body(
-                local,
-                client_world.stream.as_deref(),
-                shadow_poses,
-            )
+            culling::local_shadow_body(local, client_world.stream.as_deref(), shadow_poses)
         })
     } else {
         local

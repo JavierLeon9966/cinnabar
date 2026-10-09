@@ -110,11 +110,21 @@ mod diagnostic_tests {
 
     #[test]
     fn diagnostic_quality_changes_preserve_the_launch_shadow_budget() {
-        for quality in [EnhancedQuality::Performance, EnhancedQuality::Balanced, EnhancedQuality::Ultra] {
+        for quality in [
+            EnhancedQuality::Performance,
+            EnhancedQuality::Balanced,
+            EnhancedQuality::Ultra,
+        ] {
             let settings = EnhancedRendering::for_quality(quality).bounded_diagnostic();
             assert_eq!(settings.quality, quality);
-            assert_eq!(settings.shadow_resolution, super::super::MIN_SHADOW_RESOLUTION);
-            assert_eq!(settings.shadow_distance, super::super::DIAGNOSTIC_SHADOW_DISTANCE);
+            assert_eq!(
+                settings.shadow_resolution,
+                super::super::MIN_SHADOW_RESOLUTION
+            );
+            assert_eq!(
+                settings.shadow_distance,
+                super::super::DIAGNOSTIC_SHADOW_DISTANCE
+            );
             assert!(!settings.waving);
         }
     }

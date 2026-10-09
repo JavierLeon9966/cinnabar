@@ -164,14 +164,6 @@ fn draw_batch_commands<'w>(
     }
 }
 
-/// Uses the terrain visibility envelope for displaced and overhanging shadow casters.
-fn intersects(bounds: &CascadeBounds, allocation: &GpuChunkAllocation) -> bool {
-    let origin = queue::chunk_origin(allocation.key);
-    let aabb = crate::chunk::bounds::aabb(true);
-    let center = Vec3::from_array(origin.map(|value| value as f32)) + Vec3::from(aabb.center);
-    bounds.intersects_aabb(center, Vec3::from(aabb.half_extents))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -201,8 +193,9 @@ mod tests {
             min: Vec3::new(17.25, 0.0, 0.0),
             max: Vec3::new(17.4, 16.0, 16.0),
         };
+        let (center, half_extents) = chunk_bounds(&allocation);
         assert!(
-            intersects(&bounds, &allocation),
+            bounds.intersects_aabb(center, half_extents),
             "shadow cascade retains the displaced overhang"
         );
     }

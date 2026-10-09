@@ -188,13 +188,24 @@ pub(crate) fn prepare_enhanced_views(
             if state.settings.reflection_capture != reflection_capture {
                 *state = EnhancedViewGpu::new(&device, *settings);
             }
-            if state.resolved_depth.as_ref().is_none_or(|resolved| !resolved.matches(depth)) {
+            if state
+                .resolved_depth
+                .as_ref()
+                .is_none_or(|resolved| !resolved.matches(depth))
+            {
                 state.resolved_depth = Some(crate::scene_sampling::ResolvedDepth::new(
-                    &device, depth, crate::RuntimeStage::GpuPost,
+                    &device,
+                    depth,
+                    crate::RuntimeStage::GpuPost,
                 ));
             }
-            if state.hand_layer.as_ref().is_none_or(|layer| !layer.matches(target)) {
-                state.hand_layer = Some(crate::enhanced::hand_layer::HandLayer::new(&device, target));
+            if state
+                .hand_layer
+                .as_ref()
+                .is_none_or(|layer| !layer.matches(target))
+            {
+                state.hand_layer =
+                    Some(crate::enhanced::hand_layer::HandLayer::new(&device, target));
             }
             let settings_changed = state.settings != *settings;
             state.settings = *settings;

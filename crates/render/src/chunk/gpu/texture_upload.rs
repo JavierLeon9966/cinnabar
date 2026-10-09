@@ -1,7 +1,8 @@
 //! Immutable carrier atlas creation and upload, shared by bootstrap and server replacements.
 use super::bind_groups::{
     AnimationGpu, ChunkTextureUploadStats, MaterialGpu, PreparedChunkTextureAssets,
-    chunk_sampler_descriptor, encode_model_template_words, gpu_texture_reference, storage_table_fits,
+    chunk_sampler_descriptor, encode_model_template_words, gpu_texture_reference,
+    storage_table_fits,
 };
 use crate::chunk::*;
 /// Unused material bindings remain valid without deriving materials from carrier albedo.

@@ -88,8 +88,14 @@ fn visible_actors_precede_offscreen_casters_without_capping_publication() {
         Some(views.main),
         Some(views.publication),
     );
-    assert_eq!(batch.submissions.len(), render_model::MAX_RENDERED_PLAYERS + 1);
-    assert_eq!(batch.submissions[0].input.identity.runtime_id, render_model::MAX_RENDERED_PLAYERS as u64 + 1);
+    assert_eq!(
+        batch.submissions.len(),
+        render_model::MAX_RENDERED_PLAYERS + 1
+    );
+    assert_eq!(
+        batch.submissions[0].input.identity.runtime_id,
+        render_model::MAX_RENDERED_PLAYERS as u64 + 1
+    );
     assert!(
         batch
             .submissions

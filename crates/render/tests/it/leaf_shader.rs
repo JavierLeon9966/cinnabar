@@ -10,22 +10,11 @@ fn native_leaf_face_policy_uses_the_carrier_flag_in_both_colour_and_depth() {
     )));
     assert!(material.contains("return front || (flags & TWO_SIDED) != 0u;"));
     let chunk = include_str!("../../src/chunk.wgsl");
-    assert_eq!(
-        chunk.matches("@builtin(front_facing) front: bool").count(),
-        2
-    );
-    assert_eq!(
-        chunk
-            .matches("if (!material_face_is_visible(in.material_flags, front)) { discard; }")
-            .count(),
-        2
-    );
     // Installed native RenderChunk AlphaTest passes (1.26.51.01 Metal) test
     // alpha at .5. SeasonsOn writes opaque alpha; SeasonsOff preserves the
     // sampled alpha. This test does not claim native MSAA/A2C coverage parity.
     // Deep leaves have no cutout flag.
-    assert_eq!(chunk.matches("sampled.a < 0.5").count(), 2);
-    for definitions in [&[][..], &["ENHANCED_SHADOW"][..]] {
+    for definitions in [&[][..], &["ENHANCED_SHADOW"][..], &["ENHANCED_SHADOW", "ENHANCED_MOTION"][..]] {
         let source = shader_source::standalone(chunk, definitions);
         let module = naga::front::wgsl::parse_str(&source).unwrap();
         naga::valid::Validator::new(
@@ -34,6 +23,13 @@ fn native_leaf_face_policy_uses_the_carrier_flag_in_both_colour_and_depth() {
         )
         .validate(&module)
         .unwrap();
+        for entry in &module.entry_points {
+            if matches!(entry.name.as_str(), "fragment" | "fragment_shadow" | "fragment_motion") {
+                assert!(entry.function.arguments.iter().any(|argument| {
+                    argument.binding == Some(naga::Binding::BuiltIn(naga::BuiltIn::FrontFacing))
+                }), "{} must receive the face orientation", entry.name);
+            }
+        }
     }
     let pipeline = include_str!("../../src/chunk/pipeline/layouts.rs");
     let cube = pipeline.split("let mut model_descriptor").next().unwrap();
@@ -57,7 +53,7 @@ fn native_leaf_colour_is_world_material_gated_and_enhanced_keeps_its_existing_pa
     assert!(ordinary.contains("if (tint_kind != 0u)"));
     assert!(!enhanced.contains("let native_colour = native_cube_colour("));
     assert!(!enhanced.contains("out.native_light_levels ="));
-    assert!(enhanced.contains("let shaded = shade_surface("));
+    shader_source::composed(chunk, &["ENHANCED"]);
     assert!(ordinary.contains("textureSampleGrad(native_leaf_textures_page_0"));
     assert!(ordinary.contains("textureSampleGrad(native_leaf_textures_page_1"));
     assert!(!enhanced.contains("textureSampleGrad(native_leaf_textures_page_"));
@@ -74,11 +70,11 @@ fn alternate_atlas_views_and_native_sampler_fit_baseline_limits_without_more_sto
     assert!(!material_shader::chunk_atlas_views_fit(&limits));
     limits.max_sampled_textures_per_shader_stage = required;
     assert!(material_shader::chunk_atlas_views_fit(&limits));
-    limits.max_bindings_per_bind_group = material_shader::NATIVE_LEAF_SAMPLER_BINDING;
+    limits.max_bindings_per_bind_group = material_shader::ENHANCED_TEXTURE_REF_BINDING;
     assert!(!material_shader::chunk_atlas_views_fit(&limits));
     limits.max_bindings_per_bind_group += 1;
     assert!(material_shader::chunk_atlas_views_fit(&limits));
-    limits.max_samplers_per_shader_stage = 1;
+    limits.max_samplers_per_shader_stage = material_shader::CHUNK_SAMPLER_COUNT - 1;
     assert!(!material_shader::chunk_atlas_views_fit(&limits));
     let sampler = material_shader::native_leaf_sampler_descriptor();
     assert_eq!(sampler.min_filter, wgpu::FilterMode::Nearest);

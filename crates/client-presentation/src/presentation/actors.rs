@@ -559,7 +559,9 @@ pub fn select_actor_presentations_for_shadow_view(
         Some(local) if local.submission.route == ActorRigRoute::ShadowOnly => (None, Some(local)),
         local => (local_visible.then_some(local).flatten(), None),
     };
-    let mut selected = Vec::with_capacity(latest.len() + usize::from(local.is_some()) + usize::from(shadow_local.is_some()));
+    let mut selected = Vec::with_capacity(
+        latest.len() + usize::from(local.is_some()) + usize::from(shadow_local.is_some()),
+    );
     if let Some(local) = local {
         selected.push(local);
     }
@@ -568,14 +570,12 @@ pub fn select_actor_presentations_for_shadow_view(
             selected.push(remote);
             continue;
         }
-        if !actor_rig_submission_is_visible(&remote.submission, shadow_view.or(view))
-        {
+        if !actor_rig_submission_is_visible(&remote.submission, shadow_view.or(view)) {
             continue;
         }
         selected.push(remote);
     }
-    if let Some(local) = shadow_local
-    {
+    if let Some(local) = shadow_local {
         selected.push(local);
     }
 

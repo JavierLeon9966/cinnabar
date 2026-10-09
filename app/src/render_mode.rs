@@ -752,12 +752,25 @@ mod tests {
     #[cfg(feature = "enhanced-diagnostics")]
     #[test]
     fn diagnostic_quality_changes_keep_cameras_within_the_launch_budget() {
-        render_model::enable_enhanced_diagnostics(render_model::ENHANCED_DIAGNOSTIC_MAX_VIEWPORT).unwrap();
+        render_model::enable_enhanced_diagnostics(render_model::ENHANCED_DIAGNOSTIC_MAX_VIEWPORT)
+            .unwrap();
         let mut app = App::new();
-        app.init_resource::<RuntimeSettings>().add_systems(Update, apply_render_mode_to_cameras);
-        let camera = app.world_mut().spawn((Camera3d::default(), FlyCamera::default())).id();
-        for quality in [EnhancedQuality::Performance, EnhancedQuality::Balanced, EnhancedQuality::Ultra] {
-            set_graphics_settings(&mut app.world_mut().resource_mut::<RuntimeSettings>(), RenderMode::Enhanced, quality);
+        app.init_resource::<RuntimeSettings>()
+            .add_systems(Update, apply_render_mode_to_cameras);
+        let camera = app
+            .world_mut()
+            .spawn((Camera3d::default(), FlyCamera::default()))
+            .id();
+        for quality in [
+            EnhancedQuality::Performance,
+            EnhancedQuality::Balanced,
+            EnhancedQuality::Ultra,
+        ] {
+            set_graphics_settings(
+                &mut app.world_mut().resource_mut::<RuntimeSettings>(),
+                RenderMode::Enhanced,
+                quality,
+            );
             app.update();
             let current = app.world().get::<EnhancedRendering>(camera).unwrap();
             let bounded = EnhancedRendering::for_quality(quality).bounded_diagnostic();
@@ -767,5 +780,4 @@ mod tests {
             assert!(!current.waving);
         }
     }
-
 }

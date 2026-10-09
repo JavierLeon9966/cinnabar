@@ -94,12 +94,7 @@ pub(super) fn evaluate(
                 body.previous = std::mem::take(&mut body.current);
             }
             body.current = evaluated.pose;
-            skin_layers::carry(
-                &body.skin_layers,
-                &mut evaluated.skin_layers,
-                reset,
-                true,
-            );
+            skin_layers::carry(&body.skin_layers, &mut evaluated.skin_layers, reset, true);
             body.skin_layers = evaluated.skin_layers;
             if let Some(mut layers) = evaluated.render {
                 render::carry_layer_poses(&body.render, &mut layers, reset, true);

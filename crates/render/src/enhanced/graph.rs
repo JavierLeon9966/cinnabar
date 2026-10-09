@@ -5,8 +5,8 @@ use bevy::{
 };
 
 use super::{
-    hand_layer::{EnhancedHandCompositeLabel, EnhancedHandCompositeNode},
     depth::{EnhancedDepthLabel, EnhancedDepthNode},
+    hand_layer::{EnhancedHandCompositeLabel, EnhancedHandCompositeNode},
     post::{
         EnhancedLightingLabel, EnhancedLightingNode, EnhancedPostLabel, EnhancedPostNode,
         EnhancedSkyLabel, EnhancedSkyNode,

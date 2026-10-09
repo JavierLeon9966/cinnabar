@@ -38,18 +38,20 @@ pub fn preprocess(source: &str, definitions: &[&str]) -> String {
 /// Inline imported modules once, matching Bevy's shared WGSL definitions.
 pub fn standalone(source: &str, definitions: &[&str]) -> String {
     imports(
-        &preprocess(&meshing::cloud_viewport::shader_source(source), definitions),
+        &meshing::cloud_viewport::shader_source(source),
         &mut BTreeSet::new(),
+        definitions,
     )
 }
 
 /// Inline imports after the production constructor has resolved its constants.
 pub fn standalone_prepared(source: &str) -> String {
-    imports(source, &mut BTreeSet::new())
+    imports(source, &mut BTreeSet::new(), &[])
 }
 
-/// Expand multiline imports recursively while retaining all selected module symbols.
-fn imports(source: &str, seen: &mut BTreeSet<String>) -> String {
+/// Expand imports with the caller's definitions applied to every module.
+fn imports(source: &str, seen: &mut BTreeSet<String>, definitions: &[&str]) -> String {
+    let source = preprocess(source, definitions);
     let mut output = String::new();
     let mut lines = source.lines();
     let biome = meshing::biome_lattice::shader_source(include_str!("../../../src/biome_tint.wgsl"));
@@ -150,7 +152,7 @@ fn imports(source: &str, seen: &mut BTreeSet<String>) -> String {
                 panic!("unhandled shader import: {import}");
             };
             if seen.insert(key.to_owned()) {
-                output.push_str(&imports(body, seen));
+                output.push_str(&imports(body, seen, definitions));
             }
         } else {
             output.push_str(line);

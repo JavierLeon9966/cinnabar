@@ -508,7 +508,16 @@ fn evaluate_job(
         && catalogs.exempt == Some(actor.runtime_id)
         && context.is_local_first_person
     {
-        body::evaluate(assets, layout, state, actor, context, catalogs.tick, &mut budget).err()
+        body::evaluate(
+            assets,
+            layout,
+            state,
+            actor,
+            context,
+            catalogs.tick,
+            &mut budget,
+        )
+        .err()
     } else {
         state.world_body = None;
         None

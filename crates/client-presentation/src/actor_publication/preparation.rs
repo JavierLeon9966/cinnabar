@@ -232,14 +232,11 @@ pub fn advance_actor_frame(
             stream.set_actor_camera_position(transform.translation.to_array());
         }
         stream.set_actor_world_body_enabled(local_shadows);
-        stream.set_actor_animation_view(
-            camera
-                .single()
-                .ok()
-                .and_then(|(transform, projection, _)| {
-                    culling::animation_view(transform, projection, actor_views)
-                }),
-        );
+        stream.set_actor_animation_view(camera.single().ok().and_then(
+            |(transform, projection, _)| {
+                culling::animation_view(transform, projection, actor_views)
+            },
+        ));
         let _animation = profiler
             .as_deref()
             .map(|profiler| profiler.time(render::RuntimeStage::ActorAnimation));

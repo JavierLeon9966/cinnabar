@@ -648,7 +648,10 @@ pub(in crate::chunk) fn prepare_chunk_bind_group(
 }
 
 /// Adds runtime source dimensions when a layer's physical page uses another pixel scale.
-pub(super) fn gpu_texture_reference(assets: &assets::RuntimeAssets, reference: assets::TextureRef) -> u32 {
+pub(super) fn gpu_texture_reference(
+    assets: &assets::RuntimeAssets,
+    reference: assets::TextureRef,
+) -> u32 {
     let page_size = assets.texture_pages()[reference.page() as usize]
         .texture
         .mips[0]
