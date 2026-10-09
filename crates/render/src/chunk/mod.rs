@@ -110,14 +110,6 @@ mod textures;
 pub use texture_reload::ChunkTextureReload;
 pub(crate) mod transparent;
 
-use constants::{
-    BIOME_TINT_SHADER_HANDLE, BIOME_WORD_BYTES, CHUNK_ORIGIN_BYTES, CHUNK_SHADER_HANDLE,
-    FALLBACK_BIOME_RECORD, FALLBACK_BIOME_WORDS, GEOMETRY_STREAM_WORD_BYTES,
-    INDEXED_INDIRECT_BYTES, LIQUID_SHADER_HANDLE, MODEL_SHADER_HANDLE, PACKED_LIQUID_QUAD_BYTES,
-    PACKED_MODEL_DRAW_REF_BYTES, PACKED_MODEL_REF_BYTES, PACKED_QUAD_BYTES,
-    PACKED_QUAD_LIGHTING_BYTES, STATIC_QUAD_INDICES,
-};
-
 #[allow(unused_imports)]
 use api::{
     AcknowledgementSlot, AcknowledgementState, ChunkGpuRemovalQueue, CompletedFrameProbe,
@@ -137,6 +129,13 @@ pub use biome_tints::{
 };
 #[allow(unused_imports)]
 use biome_tints::{ChunkBiomeTintResourceIdentity, MATERIAL_UV_ROTATION_MASK};
+use constants::{
+    BIOME_TINT_SHADER_HANDLE, BIOME_WORD_BYTES, CHUNK_ORIGIN_BYTES, CHUNK_SHADER_HANDLE,
+    FALLBACK_BIOME_RECORD, FALLBACK_BIOME_WORDS, GEOMETRY_STREAM_WORD_BYTES,
+    INDEXED_INDIRECT_BYTES, LIQUID_SHADER_HANDLE, MODEL_SHADER_HANDLE, PACKED_LIQUID_QUAD_BYTES,
+    PACKED_MODEL_DRAW_REF_BYTES, PACKED_MODEL_REF_BYTES, PACKED_QUAD_BYTES,
+    PACKED_QUAD_LIGHTING_BYTES, STATIC_QUAD_INDICES,
+};
 use draw::{queue_chunks, queue_transparent_chunks};
 use extract::install_chunk_extraction;
 #[cfg(test)]
@@ -176,8 +175,6 @@ use gpu::layout::{
     advance_arena_migration, arena_capacities, begin_arena_migration, buffer_byte_len,
     checked_align_up, first_arena_growth, plan_arena_growth, write_geometry_stream_words,
 };
-#[allow(unused_imports)]
-use gpu::texture_upload::{padded_mip_bytes, upload_texture_page};
 #[allow(unused_imports)]
 use gpu::types::{
     ArenaAllocation, ChunkDepthLiquidIndirectBatches, ChunkDrawMode, ChunkIndirectBatch,

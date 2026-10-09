@@ -98,7 +98,7 @@ fn install_actor_render(app: &mut App) {
     {
         return;
     }
-    crate::enhanced::load_shader_imports(app);
+    crate::enhanced::plugin::load_shader_imports(app);
     let presentation_gate = app.world().resource::<ActorPresentationGate>().clone();
     let runtime_witness = app.world().resource::<ActorRuntimeWitness>().clone();
     let pipeline_readiness = app
