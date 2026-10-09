@@ -596,8 +596,6 @@ mod tests {
             clip_from_world: Mat4::IDENTITY,
             world_from_clip: Mat4::IDENTITY,
             camera: Vec3::ZERO,
-            forward: Vec3::NEG_Z,
-            slope: SLOPE,
             near: 0.1,
             viewport: render_model::ENHANCED_DIAGNOSTIC_MAX_VIEWPORT,
             seconds: 0.0,
