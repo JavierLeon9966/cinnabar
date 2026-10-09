@@ -12,6 +12,10 @@ fn windows_prefers_vulkan_with_dx12_fallback_without_overriding_an_explicit_back
         crate::app::preferred_render_backends(Some(OsStr::new("vulkan"))),
         None
     );
+    assert_eq!(
+        crate::app::preferred_render_backends(Some(OsStr::new("dx12"))),
+        None
+    );
     #[cfg(target_os = "windows")]
     assert_eq!(
         crate::app::preferred_render_backends(None),

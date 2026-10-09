@@ -18,6 +18,8 @@ use diagnostics::metrics::AssetMetrics;
 mod font_fallback;
 pub(crate) mod oreui_fonts;
 use font_fallback::diagnostic_font_assets;
+mod enhanced_textures;
+pub(crate) use enhanced_textures::load_optional_enhanced_textures;
 mod optional_carriers;
 pub(crate) use optional_carriers::shell_quote_path;
 use optional_carriers::{
@@ -43,6 +45,7 @@ pub const HUD_ASSETS_COMPILE_COMMAND: &str = "make hud-assets";
 pub const AUDIO_ASSETS_FILENAME: &str = assets::carriers::AUDIO.output;
 pub const AUDIO_ASSETS_COMPILE_COMMAND: &str = "make audio-assets";
 pub const FETCH_COMMAND: &str = "make vanilla-assets";
+pub const ENHANCED_PBR_DIR_ENVIRONMENT: &str = "CINNABAR_ENHANCED_PBR_DIR";
 pub const COMPILE_COMMAND: &str = "make world-assets";
 
 const VANILLA_SOURCE_JSON: &str = assets::VANILLA_SOURCE_MANIFEST;
@@ -63,6 +66,7 @@ pub enum LoadedAssetKind {
 
 pub struct LoadedAssets {
     pub runtime: Arc<RuntimeAssets>,
+    pub material_keys: Option<assets::MaterialKeys>,
     pub atmosphere: LoadedAtmosphereAssets,
     pub entities: LoadedEntityAssets,
     pub fonts: LoadedFontAssets,
@@ -659,7 +663,7 @@ pub(crate) fn load_runtime_assets_timed(
         let world = times.time("world", || load_world_carrier(path));
         (world, join(atmosphere), join(entities), join(fonts))
     });
-    let Some((runtime, blob_sha256)) = world? else {
+    let Some((runtime, blob_sha256, material_keys)) = world? else {
         return Ok(diagnostic_assets(
             selection,
             source,
@@ -671,6 +675,7 @@ pub(crate) fn load_runtime_assets_timed(
     let metrics = runtime_metrics(&runtime, source, blob_sha256);
     Ok(LoadedAssets {
         runtime,
+        material_keys,
         atmosphere: atmosphere?,
         entities: entities?,
         fonts: fonts?,
@@ -684,7 +689,7 @@ pub(crate) fn load_runtime_assets_timed(
 /// The decoded world carrier and its SHA-256, or `None` when it is absent.
 fn load_world_carrier(
     path: &Path,
-) -> Result<Option<(Arc<RuntimeAssets>, String)>, AssetStartupError> {
+) -> Result<Option<(Arc<RuntimeAssets>, String, Option<assets::MaterialKeys>)>, AssetStartupError> {
     let file = match File::open(path) {
         Ok(file) => file,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
@@ -731,15 +736,16 @@ fn load_world_carrier(
             rebuild_command: COMPILE_COMMAND,
         })?;
     let runtime = Arc::new(runtime);
-    if let Some(keys) = load_material_keys(path, runtime.material_count()) {
+    let material_keys = load_material_keys(path, runtime.material_count());
+    if let Some(keys) = material_keys.as_ref() {
         crate::runtime::network::set_base_terrain_catalog(keys.aliases());
-        crate::runtime::network::set_base_material_keys(keys);
+        crate::runtime::network::set_base_material_keys(keys.clone());
     }
     if let Some(refs) = load_vanilla_entity_refs(path) {
         crate::runtime::network::entity_pack::set_vanilla_refs(refs);
     }
     world_provenance::verify_world_carrier(path, &runtime)?;
-    Ok(Some((runtime, format_sha256(identity))))
+    Ok(Some((runtime, format_sha256(identity), material_keys)))
 }
 
 /// Wall time of each startup carrier load, logged as one line.
@@ -818,6 +824,7 @@ fn diagnostic_assets(
     );
     LoadedAssets {
         runtime,
+        material_keys: None,
         atmosphere,
         entities,
         fonts,
