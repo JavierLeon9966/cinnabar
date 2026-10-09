@@ -10,7 +10,7 @@ fn rough_dielectric_reflection_keeps_foliage_tinted_and_conserves_energy() {
     let source = r#"
 #import cinnabar::enhanced_environment::{environment_specular_weight, environment_diffuse_weight, environment_ray, environment_coordinate}
 #import cinnabar::enhanced_view::{foliage_light, surface_visibility_weight, distribution_ggx}
-@group(0) @binding(31) var<storage,read_write> results:array<vec4<f32>,7>;
+@group(0) @binding(31) var<storage,read_write> results:array<vec4<f32>,19>;
 @compute @workgroup_size(1) fn regression() {
     let green=vec3(0.035,0.28,0.012);
     let rough=environment_specular_weight(vec3(0.04),0.9,0.05);
@@ -33,7 +33,11 @@ fn rough_dielectric_reflection_keeps_foliage_tinted_and_conserves_energy() {
     var coordinate_error=0.0;
     for(var face=0u;face<6u;face+=1u) {
         let uv=vec2(0.23,0.71);
-        let coordinate=environment_coordinate(environment_ray(uv,face));
+        let ray=environment_ray(uv,face);
+        let coordinate=environment_coordinate(ray);
+        // Each face stays observable, matching the production array-layer dispatch.
+        results[7u+face]=vec4(coordinate,1.0);
+        results[13u+face]=vec4(ray,1.0);
         coordinate_error=max(coordinate_error,length(coordinate-vec3(uv,f32(face))));
     }
     results[4]=vec4(coordinate_error,surface_visibility_weight(10.0,10.18),surface_visibility_weight(10.0,10.0),1.0);
@@ -44,7 +48,7 @@ fn rough_dielectric_reflection_keeps_foliage_tinted_and_conserves_energy() {
         distribution_ggx(1.0,0.045),distribution_ggx(0.0,roughness),1.0);
 }
 "#;
-    let Some(values) = super::post_regressions::execute(source, 7) else {
+    let Some(values) = super::post_regressions::execute(source, 19) else {
         return;
     };
     assert!(
@@ -67,8 +71,24 @@ fn rough_dielectric_reflection_keeps_foliage_tinted_and_conserves_energy() {
     );
     assert!(
         values[4][0] < 0.00001,
-        "cube sampling agrees with capture camera axes"
+        "cube sampling agrees with capture camera axes: {values:?}"
     );
+    for (face, (coordinate, ray)) in values[7..13].iter().zip(&values[13..19]).enumerate() {
+        for (actual, expected) in coordinate[..3].iter().zip([0.23, 0.71, face as f32]) {
+            assert!(
+                (actual - expected).abs() < 0.00001,
+                "face {face}: {coordinate:?}"
+            );
+        }
+        let squared_length = ray[..3]
+            .iter()
+            .map(|channel| channel * channel)
+            .sum::<f32>();
+        assert!(
+            (squared_length - 1.0).abs() < 0.00001,
+            "face {face}: {ray:?}"
+        );
+    }
     assert!(
         values[4][1] < 0.002,
         "thin contacts must not blend an unrelated depth plane"
@@ -224,13 +244,26 @@ fn native_reflections_use_cached_sky_and_preserve_full_capture_confidence() {
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        let mut encoder = device.create_command_encoder(&Default::default());
+        let (scattering, scattering_sampler) =
+            super::multiple_scattering::fixture(&device, &mut encoder);
         let result_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("cached reflection regression output"),
             layout: &pipeline.get_bind_group_layout(0),
-            entries: &[wgpu::BindGroupEntry {
-                binding: 31,
-                resource: output.as_entire_binding(),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 22,
+                    resource: wgpu::BindingResource::TextureView(&scattering),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 23,
+                    resource: wgpu::BindingResource::Sampler(&scattering_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 31,
+                    resource: output.as_entire_binding(),
+                },
+            ],
         });
         let environment_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("production reflection frame, sampler and environment slots"),
@@ -262,7 +295,6 @@ fn native_reflections_use_cached_sky_and_preserve_full_capture_confidence() {
                 },
             ],
         });
-        let mut encoder = device.create_command_encoder(&Default::default());
         {
             let mut pass = encoder.begin_compute_pass(&Default::default());
             pass.set_pipeline(&pipeline);

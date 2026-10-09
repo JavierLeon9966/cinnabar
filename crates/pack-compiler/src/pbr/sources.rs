@@ -363,13 +363,11 @@ pub(super) fn load(packs: &[PbrPack], alias: &str) -> Result<Option<PbrTexture>,
                 .filter(|path| *path != color_path)
                 .map(|path| (*pack, path, PbrFormat::Legacy))
                 .or_else(|| {
-                    effective_format(owner, pack)
-                        .map(|format| {
-                            find(pack, &map_alias, "_n")
-                                .filter(|path| *path != color_path)
-                                .map(|path| (*pack, path, format))
-                        })
-                        .flatten()
+                    effective_format(owner, pack).and_then(|format| {
+                        find(pack, &map_alias, "_n")
+                            .filter(|path| *path != color_path)
+                            .map(|path| (*pack, path, format))
+                    })
                 })
         });
         let normal = if let Some((pack, path, format)) = &normal_source {
@@ -385,11 +383,9 @@ pub(super) fn load(packs: &[PbrPack], alias: &str) -> Result<Option<PbrTexture>,
                 .map(|path| (path, true, None))
                 .or_else(|| find(pack, &map_alias, "_mer").map(|path| (path, false, None)))
                 .or_else(|| {
-                    effective_format(owner, pack)
-                        .map(|format| {
-                            find(pack, &map_alias, "_s").map(|path| (path, false, Some(format)))
-                        })
-                        .flatten()
+                    effective_format(owner, pack).and_then(|format| {
+                        find(pack, &map_alias, "_s").map(|path| (path, false, Some(format)))
+                    })
                 })
         });
         let material = if let Some((path, subsurface, format)) = &material_source {

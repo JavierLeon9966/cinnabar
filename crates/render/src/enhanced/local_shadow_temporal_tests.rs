@@ -544,7 +544,8 @@ fn native_local_visibility_reprojects_camera_jitter_and_rejects_receiver_changes
         },
         metadata_history.size(),
     );
-    let (edge_frame, edge_motion) = camera(0.0, 0.0, 0.0, 0.5, 8.0);
+    // One full-resolution pixel spans half a history texel at this depth edge.
+    let (edge_frame, edge_motion) = camera(0.0, 0.0, 0.0, 1.0, 8.0);
     draw(31, edge_frame, edge_motion, false, true, 8.0, HALF / 2 - 1);
     let mut encoder = device.create_command_encoder(&Default::default());
     encoder.copy_buffer_to_buffer(&samples, 0, &readback, 0, samples.size());

@@ -155,6 +155,22 @@ fn submerged_geometry_keeps_its_colour_beside_bright_sky_and_foreground_is_rejec
                 count: None,
             },
             wgpu::BindGroupLayoutEntry {
+                binding: 22,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D3,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 23,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
                 binding: 31,
                 visibility: wgpu::ShaderStages::COMPUTE,
                 ty: wgpu::BindingType::Buffer {
@@ -193,6 +209,9 @@ fn submerged_geometry_keeps_its_colour_beside_bright_sky_and_foreground_is_rejec
     let colour_view = colour.create_view(&Default::default());
     let depth_view = depth.create_view(&Default::default());
     let sampler = device.create_sampler(&Default::default());
+    let mut encoder = device.create_command_encoder(&Default::default());
+    let (scattering, scattering_sampler) =
+        crate::enhanced::multiple_scattering::fixture(&device, &mut encoder);
     let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: None,
         layout: &layout,
@@ -210,12 +229,19 @@ fn submerged_geometry_keeps_its_colour_beside_bright_sky_and_foreground_is_rejec
                 resource: wgpu::BindingResource::Sampler(&sampler),
             },
             wgpu::BindGroupEntry {
+                binding: 22,
+                resource: wgpu::BindingResource::TextureView(&scattering),
+            },
+            wgpu::BindGroupEntry {
+                binding: 23,
+                resource: wgpu::BindingResource::Sampler(&scattering_sampler),
+            },
+            wgpu::BindGroupEntry {
                 binding: 31,
                 resource: output.as_entire_binding(),
             },
         ],
     });
-    let mut encoder = device.create_command_encoder(&Default::default());
     {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,

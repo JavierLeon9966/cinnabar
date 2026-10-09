@@ -228,7 +228,7 @@ fn volume_march_self_shadows_without_leaking_beyond_its_interval() {
 fn cloud_cores_keep_resolved_detail_and_shadows_integrate_the_same_extinction() {
     let source = r#"
 #import cinnabar::enhanced_common::{EnhancedFrame,FEATURE_VOLUMETRIC_CLOUDS}
-#import cinnabar::enhanced_clouds::{cloud_structure,cloud_shadow,cloud_path_optical_depth,cloud_light_optical_depth,cloud_scattering,cloud_depth_fraction,cloud_history_position,CLOUD_MAX_RANGE,CLOUD_SHADOW_STEPS,CLOUD_LIGHT_STEPS,CLOUD_WEATHER_FREQUENCY}
+#import cinnabar::enhanced_clouds::{cloud_structure,cloud_shadow,cloud_path_optical_depth,cloud_light_optical_depth,cloud_scattering,cloud_depth_fraction,cloud_history_position,CLOUD_MAX_RANGE,CLOUD_SHADOW_STEPS,CLOUD_LIGHT_STEPS,CLOUD_WEATHER_FREQUENCY,CLOUD_SHAPE_FREQUENCY}
 @group(0) @binding(31) var<storage,read_write> results:array<vec4<f32>,69>;
 @compute @workgroup_size(1) fn regression(){
     var frame:EnhancedFrame;
@@ -243,7 +243,8 @@ fn cloud_cores_keep_resolved_detail_and_shadows_integrate_the_same_extinction() 
     for(var index=0u;index<64u;index+=1u){
         let point=vec3(f32(index%8u)*weather_step,215.2,f32(index/8u)*weather_step);
         let structure=cloud_structure(frame,point,0.5);
-        let filtered=cloud_structure(frame,point,128.0);
+        // A footprint covering a whole shape period cannot resolve its cellular detail.
+        let filtered=cloud_structure(frame,point,1.0/CLOUD_SHAPE_FREQUENCY);
         results[index]=vec4(structure,filtered);
         if(structure.y>maximum){maximum=structure.y;occupied=point;}
     }
@@ -282,7 +283,12 @@ fn cloud_cores_keep_resolved_detail_and_shadows_integrate_the_same_extinction() 
             .iter()
             .any(|sample| sample[0] > 0.05 && sample[0] < 0.60 && sample[1] < sample[0] - 0.01)
     );
-    assert!(variance(resolved, 1) > variance(resolved, 3) * 1.5);
+    assert!(
+        variance(resolved, 1) > variance(resolved, 3) * 1.5,
+        "density variance: resolved {}, filtered {}",
+        variance(resolved, 1),
+        variance(resolved, 3)
+    );
     assert!((values[64][0] - values[64][1]).abs() < 0.0001);
     assert_eq!(
         values[64][3], 1.0,

@@ -3,14 +3,17 @@
 use crate::shader_source;
 use wgpu::util::DeviceExt as _;
 
+/// Runs production functions with the atmosphere resources they actually sample.
 pub(super) fn execute(source: &str, result_count: usize) -> Option<Vec<[f32; 4]>> {
     execute_internal(source, result_count, false)
 }
 
+/// Runs production cloud functions with generated noise and atmosphere fixtures.
 pub(super) fn execute_with_clouds(source: &str, result_count: usize) -> Option<Vec<[f32; 4]>> {
     execute_internal(source, result_count, true)
 }
 
+/// Builds the fixture bindings for the selected regression entry point and reads its results.
 fn execute_internal(source: &str, result_count: usize, clouds: bool) -> Option<Vec<[f32; 4]>> {
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
     let Ok(adapter) =
@@ -26,13 +29,7 @@ fn execute_internal(source: &str, result_count: usize, clouds: bool) -> Option<V
     }))
     .expect("Enhanced lighting regression device");
     let source = shader_source::composed(source, &[]);
-    let module = naga::front::wgsl::parse_str(&source).expect("composed regression shader");
-    let uses_scattering = module.global_variables.iter().any(|(_, variable)| {
-        variable
-            .binding
-            .as_ref()
-            .is_some_and(|binding| binding.group == 0 && binding.binding == 22)
-    });
+    let bindings = shader_source::bindings_used_by_entry_points(&source, &["regression"], 0);
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("production Enhanced regression functions"),
         source: wgpu::ShaderSource::Wgsl(source.into()),
@@ -59,8 +56,9 @@ fn execute_internal(source: &str, result_count: usize, clouds: bool) -> Option<V
     });
     let mut encoder = device.create_command_encoder(&Default::default());
     let noise = clouds.then(|| super::cloud_fixture::generate(&device, &mut encoder));
-    let scattering =
-        uses_scattering.then(|| super::multiple_scattering::fixture(&device, &mut encoder));
+    let scattering = bindings
+        .contains(&22)
+        .then(|| super::multiple_scattering::fixture(&device, &mut encoder));
     let mut entries = vec![wgpu::BindGroupEntry {
         binding: 31,
         resource: output.as_entire_binding(),
@@ -85,6 +83,12 @@ fn execute_internal(source: &str, result_count: usize, clouds: bool) -> Option<V
             resource: wgpu::BindingResource::Sampler(sampler),
         });
     }
+    entries.retain(|entry| bindings.contains(&entry.binding));
+    assert_eq!(
+        entries.len(),
+        bindings.len(),
+        "regression fixture supplies every active binding"
+    );
     let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("Enhanced regression output binding"),
         layout: &pipeline.get_bind_group_layout(0),

@@ -98,7 +98,10 @@ fn sky_view_coordinates_reconstruct_both_hemispheres() {
             value[0] > 0.9999,
             "sky cache direction must round-trip: {value:?}"
         );
-        assert!((0.0..=1.0).contains(&value[1]) && (0.0..=1.0).contains(&value[2]));
+        assert!(
+            (0.0..=1.0).contains(&value[1]) && (0.0..=1.0).contains(&value[2]),
+            "sky coordinates stay in the LUT: {value:?}"
+        );
     }
 }
 

@@ -10,6 +10,33 @@ const VIEW: &str = "struct View { clip_from_world: mat4x4<f32>, unjittered_clip_
 const FULLSCREEN: &str = "struct FullscreenVertexOutput { @builtin(position) position: vec4<f32>, @location(0) uv: vec2<f32>, }";
 const FULLSCREEN_VERTEX: &str = "@vertex fn fullscreen(@builtin(vertex_index) index: u32) -> FullscreenVertexOutput { var out: FullscreenVertexOutput; out.uv = vec2(f32((index << 1u) & 2u), f32(index & 2u)); out.position = vec4(out.uv * vec2(2.0, -2.0) + vec2(-1.0, 1.0), 0.0, 1.0); return out; }";
 
+/// Finds resources used by the selected entry points, including their called functions.
+pub fn bindings_used_by_entry_points(source: &str, entries: &[&str], group: u32) -> BTreeSet<u32> {
+    let module = naga::front::wgsl::parse_str(source).expect("fixture shader parses");
+    let info = naga::valid::Validator::new(
+        naga::valid::ValidationFlags::all(),
+        naga::valid::Capabilities::all(),
+    )
+    .validate(&module)
+    .expect("fixture shader validates");
+    module
+        .global_variables
+        .iter()
+        .filter_map(|(handle, variable)| {
+            let binding = variable.binding.as_ref()?;
+            let used = module
+                .entry_points
+                .iter()
+                .enumerate()
+                .any(|(index, entry)| {
+                    entries.contains(&entry.name.as_str())
+                        && !info.get_entry_point(index)[handle].is_empty()
+                });
+            (used && binding.group == group).then_some(binding.binding)
+        })
+        .collect()
+}
+
 /// Reads the alpha cutoff guarding a fragment discard, including named WGSL constants.
 pub fn alpha_discard_threshold(source: &str, entry: &str) -> Option<f32> {
     let module = naga::front::wgsl::parse_str(&standalone(source, &[])).expect("shader parses");

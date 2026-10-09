@@ -56,7 +56,7 @@ pub(super) fn normal(
 
 pub(super) fn specular(mut image: RgbaImage, format: PbrFormat) -> (RgbaImage, u32) {
     let lab = format == PbrFormat::LabPbr13;
-    let mut flags = PBR_REF_MATERIAL | u32::from(lab) * PBR_REF_LABPBR;
+    let mut flags = PBR_REF_MATERIAL | (u32::from(lab) * PBR_REF_LABPBR);
     for pixel in image.pixels_mut() {
         let [smoothness, green, blue, alpha] = pixel.0;
         let emission = if lab {
@@ -91,6 +91,6 @@ pub(super) fn mer(mut image: RgbaImage, subsurface: bool) -> (RgbaImage, u32) {
     }
     (
         image,
-        PBR_REF_MATERIAL | u32::from(subsurface) * PBR_REF_SUBSURFACE,
+        PBR_REF_MATERIAL | (u32::from(subsurface) * PBR_REF_SUBSURFACE),
     )
 }

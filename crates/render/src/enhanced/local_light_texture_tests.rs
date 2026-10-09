@@ -206,10 +206,6 @@ fn native_point_shadow_face_and_embedded_viewport_reject_occluded_receivers() {
                 resource: frame.as_entire_binding(),
             },
             wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::TextureView(&array),
-            },
-            wgpu::BindGroupEntry {
                 binding: 2,
                 resource: wgpu::BindingResource::Sampler(&comparison),
             },
@@ -228,6 +224,18 @@ fn native_point_shadow_face_and_embedded_viewport_reject_occluded_receivers() {
             wgpu::BindGroupEntry {
                 binding: 17,
                 resource: wgpu::BindingResource::TextureView(&visibility),
+            },
+            wgpu::BindGroupEntry {
+                binding: 18,
+                resource: frame.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 19,
+                resource: wgpu::BindingResource::TextureView(&visibility),
+            },
+            wgpu::BindGroupEntry {
+                binding: 20,
+                resource: wgpu::BindingResource::TextureView(&array),
             },
         ],
     });

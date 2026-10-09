@@ -62,7 +62,8 @@ fn displaced_models_preserve_opaque_texels_and_cutout_thresholds() {
         let mut production =
             shader_source::standalone(include_str!("../../src/model.wgsl"), definitions);
         if shadow {
-            production = production.replace("@fragment\nfn fragment_shadow(", "fn sampled_shadow(")
+            production = production
+                .replace("@fragment\nfn fragment_shadow(", "fn sampled_shadow(")
                 .replace("@builtin(front_facing) front: bool", "front: bool");
             production.push_str("\n@fragment fn shadow_colour(in: VertexOutput) -> @location(0) vec4<f32> { sampled_shadow(in, true); return vec4(1.0); }\n");
         }
@@ -211,29 +212,7 @@ fn used_alpha_resources<'a>(
     fragment: &str,
     resources: &[wgpu::BindGroupEntry<'a>],
 ) -> Vec<wgpu::BindGroupEntry<'a>> {
-    let module = naga::front::wgsl::parse_str(source).unwrap();
-    let info = naga::valid::Validator::new(
-        naga::valid::ValidationFlags::all(),
-        naga::valid::Capabilities::all(),
-    )
-    .validate(&module)
-    .unwrap();
-    let used: std::collections::BTreeSet<_> = module
-        .global_variables
-        .iter()
-        .filter_map(|(handle, global)| {
-            let binding = global.binding.as_ref()?;
-            let used = module
-                .entry_points
-                .iter()
-                .enumerate()
-                .any(|(index, entry)| {
-                    (entry.name == "alpha_vertex" || entry.name == fragment)
-                        && !info.get_entry_point(index)[handle].is_empty()
-                });
-            (used && binding.group == 0).then_some(binding.binding)
-        })
-        .collect();
+    let used = shader_source::bindings_used_by_entry_points(source, &["alpha_vertex", fragment], 0);
     let selected: Vec<_> = resources
         .iter()
         .filter(|resource| used.contains(&resource.binding))

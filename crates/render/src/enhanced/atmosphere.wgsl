@@ -47,7 +47,10 @@ fn sky_view_vertical(elevation: f32) -> f32 {
 }
 
 fn sky_view_uv(ray: vec3<f32>) -> vec2<f32> {
-    return vec2(atan2(ray.z, ray.x) / (2.0 * ATM_PI) + 0.5,
+    // Azimuth is arbitrary at the poles; avoid atan2(0, 0) on native adapters.
+    var azimuth = 0.0;
+    if (ray.x != 0.0 || ray.z != 0.0) { azimuth = atan2(ray.z, ray.x); }
+    return vec2(azimuth / (2.0 * ATM_PI) + 0.5,
         sky_view_vertical(asin(clamp(ray.y, -1.0, 1.0))));
 }
 

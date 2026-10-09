@@ -11,7 +11,7 @@ fn image_frame(
     let width = image.width();
     let height = image.height();
     let side = width.min(height);
-    if side == 0 || width.max(height) % side != 0 {
+    if side == 0 || !width.max(height).is_multiple_of(side) {
         return Err(format!(
             "material image {width}x{height} is not a square or frame strip"
         ));

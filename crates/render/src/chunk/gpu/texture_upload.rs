@@ -99,9 +99,9 @@ pub(in crate::chunk) fn build_chunk_texture_assets(
     let pbr_pages = [neutral_pbr_layers(), neutral_pbr_layers()];
     let pbr_upload_plans = pbr_pages.iter().map(|(normal, mer)| {
         let normal_plans =
-            plan_texture_mip_uploads(&normal, RenderDevice::align_copy_bytes_per_row(1)).ok()?;
+            plan_texture_mip_uploads(normal, RenderDevice::align_copy_bytes_per_row(1)).ok()?;
         let mer_plans =
-            plan_texture_mip_uploads(&mer, RenderDevice::align_copy_bytes_per_row(1)).ok()?;
+            plan_texture_mip_uploads(mer, RenderDevice::align_copy_bytes_per_row(1)).ok()?;
         Some((normal_plans, mer_plans))
     });
     let pbr_upload_plans = pbr_upload_plans.into_iter().collect::<Option<Vec<_>>>()?;
@@ -152,7 +152,7 @@ pub(in crate::chunk) fn build_chunk_texture_assets(
             plan_texture_mip_uploads(texture, RenderDevice::align_copy_bytes_per_row(1)).ok()
         })
         .collect::<Option<Vec<_>>>()?;
-    let enhanced_ref_bytes = enhanced_texture_refs.len() * std::mem::size_of::<u32>();
+    let enhanced_ref_bytes = std::mem::size_of_val(enhanced_texture_refs);
     if !storage_table_fits(
         enhanced_ref_bytes,
         device_limits.max_buffer_size,

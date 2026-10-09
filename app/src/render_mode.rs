@@ -727,8 +727,10 @@ mod tests {
                 .unwrap()
                 .depth_texture_usages,
         );
-        assert!(enhanced_depth.contains(TextureUsages::TEXTURE_BINDING));
-        assert!(enhanced_depth.contains(TextureUsages::COPY_SRC));
+        assert_eq!(
+            enhanced_depth,
+            TextureUsages::from(original) | TextureUsages::TEXTURE_BINDING,
+        );
 
         set_render_mode(
             &mut app.world_mut().resource_mut::<RuntimeSettings>(),
