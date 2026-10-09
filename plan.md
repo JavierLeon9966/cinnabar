@@ -29,6 +29,7 @@
 
 ## Enhanced photographic lighting extension
 
+- Default builds keep Enhanced disabled; opt-in builds expose its rendering and presets.
 - The owner reports the startup white screen resolved. Latest horizon-footprint
   guard visual acceptance remains pending.
 - Local integration builds and renders on Windows Vulkan at 1920x1080 through the
@@ -56,7 +57,7 @@
   the grazing-angle horizon is blue. A thin display lookup seam remains under
   verification after adding a continuous bilinear-footprint guard. Physical sky,
   indirect-light and reflection directions retain their original transport.
-  This integration and its existing test targets compile; tests were not executed.
+  Touched Rust test targets compile. Enhanced regressions, including native GPU shader fixtures, pass.
   A saved clear-weather low-sun
   roof/slab/five-beacon scene is prepared outside git; first local server launch awaits
   PC readiness under the native-testing policy.
@@ -100,7 +101,7 @@
   Directional map size/range, cloud/SSR samples, effects resolution, irradiance batches,
   reflection filtering/refresh and lamp shadows follow the preset. Persistent effect
   targets and post bindings avoid repeated creation for unchanged inputs.
-  Touched Rust crates compile with test targets; tests were not executed.
+  Quality-policy tests and native renderer regression fixtures pass locally.
   Local implementation; Windows Vulkan pointer/keyboard quality selection passed.
   Controller, other graphics backends and user-owned frame-budget acceptance remain
   incomplete. Separate lamp arrays avoid allocating
