@@ -44,6 +44,13 @@ fn displaced_models_preserve_opaque_texels_and_cutout_thresholds() {
     let sampler = gpu
         .device
         .create_sampler(&material_shader::native_leaf_sampler_descriptor());
+    let texture_refs = gpu.words(
+        &vec![u32::MAX; assets::MAX_TEXTURE_PAGES * assets::MAX_TEXTURE_LAYERS],
+        wgpu::BufferUsages::STORAGE,
+    );
+    let view_uniform = gpu.buffer(&[0.0; 104], wgpu::BufferUsages::UNIFORM);
+    let frame = gpu.buffer(&[0.0; 256], wgpu::BufferUsages::UNIFORM);
+    let resources = alpha_resources(&view, &sampler, &texture_refs, &view_uniform, &frame);
     for (enhanced, shadow) in [(false, false), (true, false), (false, true)] {
         let definitions: &[&str] = if shadow {
             &["OPAQUE_OVERDRAW", "ENHANCED_SHADOW"]
@@ -55,8 +62,10 @@ fn displaced_models_preserve_opaque_texels_and_cutout_thresholds() {
         let mut production =
             shader_source::standalone(include_str!("../../src/model.wgsl"), definitions);
         if shadow {
-            production = production.replace("@fragment\nfn fragment_shadow(", "fn sampled_shadow(");
-            production.push_str("\n@fragment fn shadow_colour(in: VertexOutput) -> @location(0) vec4<f32> { sampled_shadow(in); return vec4(1.0); }\n");
+            production = production
+                .replace("@fragment\nfn fragment_shadow(", "fn sampled_shadow(")
+                .replace("@builtin(front_facing) front: bool", "front: bool");
+            production.push_str("\n@fragment fn shadow_colour(in: VertexOutput) -> @location(0) vec4<f32> { sampled_shadow(in, true); return vec4(1.0); }\n");
         }
         let source = format!(
             "{}\n{}",
@@ -66,35 +75,19 @@ fn displaced_models_preserve_opaque_texels_and_cutout_thresholds() {
                 &format!("{}u", assets::MATERIAL_FLAG_ALPHA_CUTOUT)
             )
         );
-        let bindings = if enhanced {
-            [4, 5]
-        } else {
-            material_shader::NATIVE_LEAF_TEXTURE_BINDINGS
-        };
+        let source = source.replace(
+            "@group(2) @binding(0)",
+            &format!("@group(0) @binding({FRAME_BINDING})"),
+        );
+        let fragment = if shadow { "shadow_colour" } else { "fragment" };
+        let bindings = used_alpha_resources(&source, fragment, &resources);
         let actual = gpu.render(
             &source,
             "alpha_vertex",
             &[Draw {
-                fragment: if shadow { "shadow_colour" } else { "fragment" },
+                fragment,
                 vertices: 0..48,
-                bindings: &[
-                    wgpu::BindGroupEntry {
-                        binding: bindings[0],
-                        resource: wgpu::BindingResource::TextureView(&view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: bindings[1],
-                        resource: wgpu::BindingResource::TextureView(&view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 6,
-                        resource: wgpu::BindingResource::Sampler(&sampler),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: material_shader::NATIVE_LEAF_SAMPLER_BINDING,
-                        resource: wgpu::BindingResource::Sampler(&sampler),
-                    },
-                ],
+                bindings: &bindings,
                 blend: None,
                 write_depth: true,
             }],
@@ -136,30 +129,14 @@ fn displaced_models_preserve_opaque_texels_and_cutout_thresholds() {
             &format!("{}u", assets::MATERIAL_FLAG_ALPHA_CUTOUT)
         )
     );
+    let bindings = used_alpha_resources(&source, "fragment", &resources);
     let actual = gpu.render(
         &source,
         "alpha_vertex",
         &[Draw {
             fragment: "fragment",
             vertices: 0..48,
-            bindings: &[
-                wgpu::BindGroupEntry {
-                    binding: material_shader::NATIVE_LEAF_TEXTURE_BINDINGS[0],
-                    resource: wgpu::BindingResource::TextureView(&view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: material_shader::NATIVE_LEAF_TEXTURE_BINDINGS[1],
-                    resource: wgpu::BindingResource::TextureView(&view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 6,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: material_shader::NATIVE_LEAF_SAMPLER_BINDING,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-            ],
+            bindings: &bindings,
             blend: None,
             write_depth: true,
         }],
@@ -175,6 +152,78 @@ fn displaced_models_preserve_opaque_texels_and_cutout_thresholds() {
             "opaque model writes cube opacity, while the cutout threshold keeps its admitted alpha"
         );
     }
+}
+
+const FRAME_BINDING: u32 = material_shader::ENHANCED_TEXTURE_REF_BINDING + 1;
+
+/// Supplies neutral material resources while the fixture varies only source alpha.
+fn alpha_resources<'a>(
+    view: &'a wgpu::TextureView,
+    sampler: &'a wgpu::Sampler,
+    texture_refs: &'a wgpu::Buffer,
+    view_uniform: &'a wgpu::Buffer,
+    frame: &'a wgpu::Buffer,
+) -> Vec<wgpu::BindGroupEntry<'a>> {
+    let mut resources = vec![
+        wgpu::BindGroupEntry {
+            binding: 0,
+            resource: view_uniform.as_entire_binding(),
+        },
+        wgpu::BindGroupEntry {
+            binding: FRAME_BINDING,
+            resource: frame.as_entire_binding(),
+        },
+        wgpu::BindGroupEntry {
+            binding: material_shader::ENHANCED_TEXTURE_REF_BINDING,
+            resource: texture_refs.as_entire_binding(),
+        },
+    ];
+    for binding in [4, 5]
+        .into_iter()
+        .chain(material_shader::NATIVE_LEAF_TEXTURE_BINDINGS)
+        .chain(material_shader::PBR_NORMAL_TEXTURE_BINDINGS)
+        .chain(material_shader::PBR_MER_TEXTURE_BINDINGS)
+        .chain(material_shader::ENHANCED_COLOR_TEXTURE_BINDINGS)
+        .chain(material_shader::ENHANCED_NORMAL_TEXTURE_BINDINGS)
+        .chain(material_shader::ENHANCED_MER_TEXTURE_BINDINGS)
+    {
+        resources.push(wgpu::BindGroupEntry {
+            binding,
+            resource: wgpu::BindingResource::TextureView(view),
+        });
+    }
+    for binding in [
+        6,
+        material_shader::NATIVE_LEAF_SAMPLER_BINDING,
+        material_shader::PBR_SAMPLER_BINDING,
+        material_shader::ENHANCED_SAMPLER_BINDING,
+    ] {
+        resources.push(wgpu::BindGroupEntry {
+            binding,
+            resource: wgpu::BindingResource::Sampler(sampler),
+        });
+    }
+    resources
+}
+
+/// Selects the bindings reached by the fixture's real vertex and fragment entry points.
+fn used_alpha_resources<'a>(
+    source: &str,
+    fragment: &str,
+    resources: &[wgpu::BindGroupEntry<'a>],
+) -> Vec<wgpu::BindGroupEntry<'a>> {
+    let used = shader_source::bindings_used_by_entry_points(source, &["alpha_vertex", fragment], 0);
+    let selected: Vec<_> = resources
+        .iter()
+        .filter(|resource| used.contains(&resource.binding))
+        .cloned()
+        .collect();
+    assert_eq!(
+        selected.len(),
+        used.len(),
+        "alpha fixture must supply every active terrain binding"
+    );
+    selected
 }
 
 const VERTEX: &str = r#"
