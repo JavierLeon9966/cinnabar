@@ -7,6 +7,7 @@ mod audio_pcm;
 pub mod bamboo;
 pub mod banner;
 mod biome;
+mod biome_noise;
 mod blob;
 mod block_entity;
 pub mod block_entity_geometry;
@@ -37,12 +38,14 @@ mod model;
 mod ogg;
 mod particle;
 mod physics_registry;
+mod pinned_content;
 mod potion;
 mod provenance;
 mod registry;
 mod runtime;
 mod seasonal_foliage;
 mod server_lang;
+mod session_entities;
 mod skin_geometry;
 mod sound_bank;
 mod sound_events;
@@ -107,6 +110,7 @@ pub use biome::{
     MISSING_BIOME_DENSE_INDEX, RAW_BIOME_ID_COUNT, ResolvedBiomeTints, TINT_MAP_BYTES,
     TINT_MAP_COUNT, TINT_MAP_SIZE, TintMapId, TintSource, colormap_coordinate, read_biome_registry,
 };
+pub use biome_noise::{ClientRandom, grass_noise_permutation};
 pub use blob::{BLOB_MAGIC, BLOB_VERSION, MATERIAL_BYTES, encode_blob, write_blob_atomic};
 pub use block_entity::{
     BLOCK_ENTITY_CARRIER_MAGIC, BLOCK_ENTITY_CARRIER_VERSION, BLOCK_ENTITY_ROUTES,
@@ -244,6 +248,10 @@ pub use physics_registry::{
     BlockPhysicsFlags, BlockPhysicsRecord, PhysicsRegistry, SurfaceResponse,
     physics_registry_header_protocol, read_physics_registry, read_physics_registry_for_protocol,
 };
+pub use pinned_content::{
+    active_content_registry_protocol, pinned_block_registry_bytes, pinned_block_sequential_id,
+    pinned_world_provenance,
+};
 pub use provenance::{
     BlobProvenance, VANILLA_SOURCE_MANIFEST, VanillaSource, canonical_source_manifest_sha256,
     vanilla_source, vanilla_source_manifest_sha256,
@@ -263,6 +271,7 @@ pub use seasonal_foliage::{
     SeasonalFoliageBlock, seasonal_foliage_cell_shelters, seasonal_foliage_palette_index,
 };
 pub use server_lang::{MAX_SERVER_LANG_INPUT_BYTES, ServerLangOverlay};
+pub use session_entities::SessionEntityPack;
 pub use sound_bank::{
     MAX_SOUND_BANK_FILES, MAX_SOUND_BANK_PATH_BYTES, MAX_SOUND_BANK_PREFIX_BYTES, SOUND_BANK_MAGIC,
     SoundBankEntry, SoundBankError, SoundBankIndex, encode_sound_bank, sound_bank_prefix_len,
@@ -270,9 +279,11 @@ pub use sound_bank::{
 pub use sound_events::{FloatRange, RouteLookup, SoundEventTables, SoundRoute};
 pub use stair::StairDirection;
 pub use texture::{
-    MAX_TILE_SIZE, MIP_COUNT, TERRAIN_QUAD_SHIFT_MASK, TILE_SIZE, TextureArray, TextureMip,
-    VANILLA_TERRAIN_MIP_COUNT, build_legacy_terrain_mip_chain, build_texture_mip_chain,
-    downsample_linear_premultiplied, legacy_terrain_mip, rebuild_legacy_terrain_mips,
+    MAX_TILE_SIZE, MIP_COUNT, PBR_HEIGHT_SCALE, PBR_REF_COLOR, PBR_REF_HEIGHT, PBR_REF_LABPBR,
+    PBR_REF_MATERIAL, PBR_REF_NORMAL, PBR_REF_OCCLUSION, PBR_REF_SUBSURFACE, PBR_TILE_SIZE,
+    TERRAIN_QUAD_SHIFT_MASK, TILE_SIZE, TextureArray, TextureMip, VANILLA_TERRAIN_MIP_COUNT,
+    build_legacy_terrain_mip_chain, build_texture_mip_chain, downsample_linear_premultiplied,
+    legacy_terrain_mip, rebuild_legacy_terrain_mips,
 };
 pub use ui::{
     MAX_UI_ATLAS_PAGES, MAX_UI_ATLAS_SIDE, MAX_UI_CARRIER_BYTES, MAX_UI_FILE_BYTES, MAX_UI_FILES,
@@ -285,16 +296,4 @@ pub use weather_textures::{
     END_SKY_SIDE, MAX_WEATHER_TEXTURES_BYTES, WEATHER_SHEET_SIDE, WEATHER_TEXTURES_MAGIC,
     WEATHER_TEXTURES_VERSION, WeatherImage, WeatherTextures, WeatherTexturesError,
     decode_weather_textures, encode_weather_textures,
-};
-
-mod biome_noise;
-pub use biome_noise::{ClientRandom, grass_noise_permutation};
-
-mod session_entities;
-pub use session_entities::SessionEntityPack;
-
-mod pinned_content;
-pub use pinned_content::{
-    active_content_registry_protocol, pinned_block_registry_bytes, pinned_block_sequential_id,
-    pinned_world_provenance,
 };
