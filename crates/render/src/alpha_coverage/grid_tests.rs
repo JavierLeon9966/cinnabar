@@ -191,6 +191,17 @@ fn grid_raster(gpu: &Gpu, model: bool, enhanced: bool, samples: u32) -> Vec<u8> 
 }}
 "#
     ));
+    let used = crate::shader_source::bindings_used_by_entry_points(
+        &source,
+        &["grid_vertex", "grid_fragment"],
+        0,
+    );
+    bindings.retain(|resource| used.contains(&resource.binding));
+    assert_eq!(
+        bindings.len(),
+        used.len(),
+        "grid fixture binds exactly its active resources"
+    );
     gpu.render_with_state(
         &source,
         "grid_vertex",

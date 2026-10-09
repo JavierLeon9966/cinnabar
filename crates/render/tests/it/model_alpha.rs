@@ -244,6 +244,21 @@ const VERTEX: &str = r#"
 }
 "#;
 
+/// Keeps production blended sampling while removing the downstream lighting work.
+fn blended_sampling_source(raw: &str) -> String {
+    let raw = raw.replace("\r\n", "\n");
+    let start = raw.find("fn fragment_blend(").unwrap();
+    let sample_end = start
+        + raw[start..]
+            .find("    // The background is fogged")
+            .unwrap();
+    let end = sample_end
+        + raw[sample_end..]
+            .find("\n}\n#endif\n#ifdef ENHANCED_SHADOW")
+            .unwrap();
+    format!("{}    return sampled;{}", &raw[..sample_end], &raw[end..])
+}
+
 #[test]
 fn blended_enhanced_models_use_authored_albedo_and_animation_alpha() {
     let Some(gpu) = Gpu::for_fixture("blended model authored albedo") else {
@@ -267,17 +282,6 @@ fn blended_enhanced_models_use_authored_albedo_and_animation_alpha() {
         }
     }
     let raw = include_str!("../../src/model.wgsl");
-    let start = raw.find("fn fragment_blend(").unwrap();
-    let sample_end = start
-        + raw[start..]
-            .find("    // The background is fogged")
-            .unwrap();
-    let end = sample_end
-        + raw[sample_end..]
-            .find("\n}\n#endif\n#ifdef ENHANCED_SHADOW")
-            .unwrap();
-    // Preserve the production sampling branch while removing downstream lighting.
-    let sampling = format!("{}    return sampled;{}", &raw[..sample_end], &raw[end..]);
     let vertex = VERTEX
         .replace("ALPHA_FLAG", "0u")
         .replace(
@@ -288,43 +292,49 @@ fn blended_enhanced_models_use_authored_albedo_and_animation_alpha() {
             "out.next_texture = out.current_texture;",
             "out.next_texture = out.current_texture + 1u; out.frame_blend = f32(cell % 4u) / 3.0;",
         );
-    for enhanced in [false, true] {
-        let source = format!(
-            "{}\n{vertex}",
-            shader_source::standalone(&sampling, if enhanced { &["ENHANCED"] } else { &[] })
-        );
-        let bindings = used_alpha_resources(&source, "fragment_blend", &resources);
-        let pixels = gpu.render(
-            &source,
-            "alpha_vertex",
-            &[Draw {
-                fragment: "fragment_blend",
-                vertices: 0..48,
-                bindings: &bindings,
-                blend: None,
-                write_depth: true,
-            }],
-        );
-        for case in 0..8 {
-            let offset = ((SNAPSHOT_SIDE as usize / 2) * SNAPSHOT_SIDE as usize
-                + (case * 2 + 1) * SNAPSHOT_SIDE as usize / 16)
-                * 4;
-            let expected = if enhanced && case < 4 {
-                let blend = (case % 4) as f32 / 3.0;
-                std::array::from_fn(|channel| {
-                    ([180.0, 70.0, 20.0, 64.0][channel] * (1.0 - blend)
-                        + [40.0, 220.0, 100.0, 192.0][channel] * blend)
-                        .round() as u8
-                })
-            } else {
-                [80, 120, 160, 255]
-            };
-            for (actual, expected) in pixels[offset..offset + 4].iter().zip(expected) {
-                assert!(
-                    actual.abs_diff(expected) <= 1,
-                    "Enhanced={enhanced} case={case}: actual {:?}, expected {expected}",
-                    &pixels[offset..offset + 4]
-                );
+    for source_text in [
+        raw.to_owned(),
+        raw.replace("\r\n", "\n").replace('\n', "\r\n"),
+    ] {
+        let sampling = blended_sampling_source(&source_text);
+        for enhanced in [false, true] {
+            let source = format!(
+                "{}\n{vertex}",
+                shader_source::standalone(&sampling, if enhanced { &["ENHANCED"] } else { &[] })
+            );
+            let bindings = used_alpha_resources(&source, "fragment_blend", &resources);
+            let pixels = gpu.render(
+                &source,
+                "alpha_vertex",
+                &[Draw {
+                    fragment: "fragment_blend",
+                    vertices: 0..48,
+                    bindings: &bindings,
+                    blend: None,
+                    write_depth: true,
+                }],
+            );
+            for case in 0..8 {
+                let offset = ((SNAPSHOT_SIDE as usize / 2) * SNAPSHOT_SIDE as usize
+                    + (case * 2 + 1) * SNAPSHOT_SIDE as usize / 16)
+                    * 4;
+                let expected = if enhanced && case < 4 {
+                    let blend = (case % 4) as f32 / 3.0;
+                    std::array::from_fn(|channel| {
+                        ([180.0, 70.0, 20.0, 64.0][channel] * (1.0 - blend)
+                            + [40.0, 220.0, 100.0, 192.0][channel] * blend)
+                            .round() as u8
+                    })
+                } else {
+                    [80, 120, 160, 255]
+                };
+                for (actual, expected) in pixels[offset..offset + 4].iter().zip(expected) {
+                    assert!(
+                        actual.abs_diff(expected) <= 1,
+                        "Enhanced={enhanced} case={case}: actual {:?}, expected {expected}",
+                        &pixels[offset..offset + 4]
+                    );
+                }
             }
         }
     }
