@@ -326,6 +326,9 @@ fn actor_surface_color(input: VertexOutput, front: bool) -> vec4<f32> {
         color = vec4(mix(mix(color.rgb, tex1.rgb, tex1.a), tex2.rgb, tex2.a), color.a);
     }
 #endif
+#ifdef ALPHA_TO_COVERAGE
+    color.a = coverage;
+#endif
     return color;
 }
 
@@ -395,11 +398,7 @@ fn actor_fragment(input: VertexOutput, @builtin(front_facing) front: bool) -> @l
     if (material == ACTOR_MATERIAL_GLINT) {
         lit_gamma += actor_glint_color(input, front);
     }
-#ifdef ALPHA_TO_COVERAGE
-    let fogged_gamma = vec4(actor_distance_fog(lit_gamma, input.world_position, view.world_position), coverage);
-#else
     let fogged_gamma = vec4(actor_distance_fog(lit_gamma, input.world_position, view.world_position), color.a);
-#endif
 #ifdef ACTOR_GAMMA_BLEND
     return fogged_gamma;
 #else

@@ -1,11 +1,11 @@
 //! Renderer setup shared by direct and launcher sessions.
 
-use std::num::NonZeroU32;
+use std::{ffi::OsStr, num::NonZeroU32};
 
 use bevy::{
     render::{
         RenderPlugin,
-        settings::{RenderCreation, WgpuSettings},
+        settings::{Backends, RenderCreation, WgpuSettings},
     },
     window::{PresentMode, Window},
 };
@@ -28,9 +28,7 @@ pub(super) fn render_plugin() -> RenderPlugin {
         .limits
         .max_storage_buffers_per_shader_stage
         .max(render::required_vertex_storage_buffers());
-    if let Some(backends) =
-        super::preferred_render_backends(std::env::var_os("WGPU_BACKEND").as_deref())
-    {
+    if let Some(backends) = preferred_render_backends(std::env::var_os("WGPU_BACKEND").as_deref()) {
         settings.backends = Some(backends);
     }
     #[cfg(all(feature = "enhanced", target_os = "windows"))]
@@ -38,6 +36,23 @@ pub(super) fn render_plugin() -> RenderPlugin {
     RenderPlugin {
         render_creation: RenderCreation::Automatic(settings),
         ..Default::default()
+    }
+}
+
+/// Prefers capable Windows backends unless the operator selected one explicitly.
+pub(crate) fn preferred_render_backends(explicit: Option<&OsStr>) -> Option<Backends> {
+    if explicit.is_some() {
+        return None;
+    }
+    #[cfg(target_os = "windows")]
+    {
+        // Prefer Vulkan for GPU terrain culling, with DX12 as the fallback.
+        // An explicit WGPU_BACKEND retains operator control.
+        Some(Backends::VULKAN | Backends::DX12)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        None
     }
 }
 

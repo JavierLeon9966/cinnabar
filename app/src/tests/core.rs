@@ -9,20 +9,23 @@ fn windows_prefers_vulkan_with_dx12_fallback_without_overriding_an_explicit_back
     use std::ffi::OsStr;
 
     assert_eq!(
-        crate::app::preferred_render_backends(Some(OsStr::new("vulkan"))),
+        crate::app::render_setup::preferred_render_backends(Some(OsStr::new("vulkan"))),
         None
     );
     assert_eq!(
-        crate::app::preferred_render_backends(Some(OsStr::new("dx12"))),
+        crate::app::render_setup::preferred_render_backends(Some(OsStr::new("dx12"))),
         None
     );
     #[cfg(target_os = "windows")]
     assert_eq!(
-        crate::app::preferred_render_backends(None),
+        crate::app::render_setup::preferred_render_backends(None),
         Some(bevy::render::settings::Backends::VULKAN | bevy::render::settings::Backends::DX12)
     );
     #[cfg(not(target_os = "windows"))]
-    assert_eq!(crate::app::preferred_render_backends(None), None);
+    assert_eq!(
+        crate::app::render_setup::preferred_render_backends(None),
+        None
+    );
 }
 
 #[test]

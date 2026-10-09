@@ -44,6 +44,12 @@ fn discard_threshold(
                 .or_else(|| discard_threshold(module, function, reject))
         }
         naga::Statement::Block(inner) => discard_threshold(module, function, inner),
+        naga::Statement::Call {
+            function: called, ..
+        } => {
+            let called = &module.functions[*called];
+            discard_threshold(module, called, &called.body)
+        }
         _ => None,
     })
 }

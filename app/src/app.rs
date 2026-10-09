@@ -19,7 +19,7 @@ use bevy::{
         App, ClearColor, Color, DefaultPlugins, First, IntoScheduleConfigs, Last, PluginGroup,
         Resource, SystemSet, Update, default,
     },
-    render::{diagnostic::RenderDiagnosticsPlugin, settings::Backends},
+    render::diagnostic::RenderDiagnosticsPlugin,
     window::WindowPlugin,
 };
 use chunk_pipeline::PublicationServiceConfig;
@@ -105,7 +105,7 @@ use diagnostics::metrics::MetricsCollector;
 #[cfg(feature = "acceptance")]
 use crate::acceptance::model_witness::drive_model_witness;
 
-mod render_setup;
+pub(crate) mod render_setup;
 use render_setup::render_plugin;
 
 const PHYSICS_REGISTRY_SHA256: &str =
@@ -404,23 +404,6 @@ pub(crate) fn configure_client_runtime_frame_systems(app: &mut App) {
                 .after(FlyCameraUpdateSet),
         )
         .add_systems(Last, arm_shutdown_watchdog);
-}
-
-pub(crate) fn preferred_render_backends(explicit: Option<&OsStr>) -> Option<Backends> {
-    if explicit.is_some() {
-        return None;
-    }
-    #[cfg(target_os = "windows")]
-    {
-        // Prefer Vulkan so capable Windows adapters can use count-driven GPU Hi-Z terrain
-        // culling. Keep DX12 admitted as the fallback for drivers without a usable Vulkan
-        // surface; an explicit WGPU_BACKEND still retains full operator control.
-        Some(Backends::VULKAN | Backends::DX12)
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        None
-    }
 }
 
 /// Binds the identity-checked session-directory owner for direct starts.
