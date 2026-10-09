@@ -681,8 +681,10 @@ pub fn prepare_actor_render_frame(
             &mut batch,
             |runtime_id| {
                 if local_shadows && runtime_id == local_runtime_id {
-                    return culling::world_rig(stream, runtime_id, local_runtime_id, true)
-                        .map(|rig| std::borrow::Cow::Borrowed(rig.render));
+                    return client_world.stream.as_ref().and_then(|stream| {
+                        culling::world_rig(stream, runtime_id, local_runtime_id, true)
+                            .map(|rig| std::borrow::Cow::Borrowed(rig.render))
+                    });
                 }
                 if runtime_id == local_runtime_id
                     && let Some(pose) = &local_emote_pose

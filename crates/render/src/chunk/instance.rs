@@ -31,6 +31,7 @@ pub struct ChunkRenderInstance {
 
 impl ChunkRenderInstance {
     /// Retains immutable resident geometry without copying its packed streams.
+    #[cfg(feature = "enhanced")]
     pub(crate) fn indirect_geometry(
         &self,
     ) -> (
