@@ -44,6 +44,7 @@ pub(crate) struct ProbeOrigin {
     pub epoch: u64,
     pub quality: super::EnhancedQuality,
     pub(crate) source: Option<Entity>,
+    dimension: Option<i32>,
     completed_faces: Arc<AtomicU64>,
     lighting_signature: Arc<AtomicU64>,
 }
@@ -118,6 +119,7 @@ fn sync_cameras(
     mut images: ResMut<Assets<Image>>,
     time: Option<Res<Time>>,
     atmosphere: Option<Res<crate::AtmosphereFrame>>,
+    environment: Option<Res<crate::AtmosphereViewInputs>>,
     materials: Option<Res<crate::ChunkTextureAssets>>,
     actors: Option<Res<crate::ActorRenderFrame>>,
     changed_chunks: Query<(), Changed<crate::ChunkRenderInstance>>,
@@ -153,8 +155,12 @@ fn sync_cameras(
         }
         return;
     };
-    let source_changed = origin.source != Some(source_entity);
+    let dimension = environment
+        .as_ref()
+        .map(|environment| environment.dimension);
+    let source_changed = origin.source != Some(source_entity) || origin.dimension != dimension;
     origin.source = Some(source_entity);
+    origin.dimension = dimension;
     origin.quality = settings.quality;
     let budget = super::quality::budget(settings.quality);
     cameras
@@ -914,53 +920,5 @@ pub(crate) fn capture(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn actor_clock_stamps_do_not_refresh_a_stationary_reflection() {
-        let mut frame = crate::ActorRenderFrame::default();
-        frame.rig.instances = Arc::from([crate::ActorGpuInstance::default()]);
-        let unchanged = actor_signature(&frame);
-        frame.rig.frame_generation += 1;
-        Arc::make_mut(&mut frame.rig.instances)[0].partial_tick = 0.5;
-        assert_eq!(actor_signature(&frame), unchanged);
-        Arc::make_mut(&mut frame.rig.instances)[0].world_from_actor[0][3] = 5.0;
-        assert_ne!(actor_signature(&frame), unchanged);
-    }
-
-    #[test]
-    fn stale_render_feedback_cannot_complete_a_relocated_probe() {
-        let mut origin = ProbeOrigin {
-            epoch: 1,
-            ..Default::default()
-        };
-        origin.reset_faces();
-        let previous_frame = origin.clone();
-        previous_frame.complete_face(3);
-        assert_eq!(origin.face_mask(), 1 << 3);
-        origin.epoch = 2;
-        origin.reset_faces();
-        previous_frame.complete_face(1);
-        assert_eq!(origin.face_mask(), 0);
-        origin.complete_face(4);
-        assert_eq!(origin.face_mask(), 1 << 4);
-    }
-
-    #[test]
-    fn cube_capture_axes_are_orthogonal_and_cover_the_sphere() {
-        let mut sum = Vec3::ZERO;
-        for face in 0..6 {
-            let (direction, up) = face_basis(face);
-            assert_eq!(direction.dot(up), 0.0);
-            sum += direction;
-        }
-        assert_eq!(sum, Vec3::ZERO);
-    }
-
-    #[test]
-    fn probe_origin_hysteresis_avoids_eight_block_reflection_drops() {
-        assert!(!should_relocate(Vec3::ZERO, Vec3::new(15.99, 0.0, 0.0)));
-        assert!(!should_relocate(Vec3::ZERO, Vec3::new(0.0, 0.0, -16.0)));
-        assert!(should_relocate(Vec3::ZERO, Vec3::new(16.01, 0.0, 0.0)));
-    }
-}
+#[path = "probe_lifecycle_tests.rs"]
+mod tests;
