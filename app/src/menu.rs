@@ -241,35 +241,11 @@ struct SessionIntents {
 }
 
 impl MenuRuntime {
-    /// Mirrors the applied mode; a pending menu toggle wins until taken.
-    pub(crate) fn sync_render_mode(&mut self, applied: RenderMode) {
-        if self.render_mode_request.is_none() {
-            self.render_mode = applied;
-        }
-    }
-
-    /// Mirrors applied quality while retaining a pending menu choice.
-    pub(crate) fn sync_enhanced_quality(&mut self, applied: EnhancedQuality) {
-        if self.enhanced_quality_request.is_none() {
-            self.enhanced_quality = applied;
-        }
-    }
-
     /// Shows the VSync toggle locked to a launch-flag override.
     #[must_use]
     pub(crate) const fn with_vsync_override(mut self, vsync: Option<bool>) -> Self {
         self.vsync_override = vsync;
         self
-    }
-
-    /// Consume the pending Video-section change.
-    pub(crate) fn take_render_mode_request(&mut self) -> Option<RenderMode> {
-        self.render_mode_request.take()
-    }
-
-    /// Consume the pending Enhanced quality change.
-    pub(crate) fn take_enhanced_quality_request(&mut self) -> Option<EnhancedQuality> {
-        self.enhanced_quality_request.take()
     }
 
     /// Return the extension settings file alongside the other user settings.
