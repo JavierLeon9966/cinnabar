@@ -2,9 +2,23 @@
 
 pub(crate) const NATIVE_LEAF_TEXTURE_BINDINGS: [u32; assets::MAX_TEXTURE_PAGES] = [16, 17];
 pub(crate) const NATIVE_LEAF_SAMPLER_BINDING: u32 = 18;
-pub(crate) const CHUNK_SAMPLER_COUNT: u32 = 2;
-pub(crate) const CHUNK_SAMPLED_TEXTURE_BINDINGS: u32 =
-    (assets::MAX_TEXTURE_PAGES + NATIVE_LEAF_TEXTURE_BINDINGS.len()) as u32;
+pub(crate) const PBR_NORMAL_TEXTURE_BINDINGS: [u32; assets::MAX_TEXTURE_PAGES] = [19, 20];
+pub(crate) const PBR_MER_TEXTURE_BINDINGS: [u32; assets::MAX_TEXTURE_PAGES] = [21, 22];
+pub(crate) const PBR_SAMPLER_BINDING: u32 = 23;
+pub(crate) const ENHANCED_COLOR_TEXTURE_BINDINGS: [u32; assets::MAX_TEXTURE_PAGES] = [24, 25];
+pub(crate) const ENHANCED_NORMAL_TEXTURE_BINDINGS: [u32; assets::MAX_TEXTURE_PAGES] = [26, 27];
+pub(crate) const ENHANCED_MER_TEXTURE_BINDINGS: [u32; assets::MAX_TEXTURE_PAGES] = [28, 29];
+pub(crate) const ENHANCED_SAMPLER_BINDING: u32 = 30;
+pub(crate) const ENHANCED_TEXTURE_REF_BINDING: u32 = 31;
+pub(crate) const CHUNK_SAMPLER_COUNT: u32 = 4;
+pub(crate) const CHUNK_SAMPLED_TEXTURE_BINDINGS: u32 = (assets::MAX_TEXTURE_PAGES
+    + NATIVE_LEAF_TEXTURE_BINDINGS.len()
+    + PBR_NORMAL_TEXTURE_BINDINGS.len()
+    + PBR_MER_TEXTURE_BINDINGS.len()
+    + ENHANCED_COLOR_TEXTURE_BINDINGS.len()
+    + ENHANCED_NORMAL_TEXTURE_BINDINGS.len()
+    + ENHANCED_MER_TEXTURE_BINDINGS.len())
+    as u32;
 
 const TEXTURE_WIDTH_SHIFT: u32 = 11;
 const TEXTURE_HEIGHT_SHIFT: u32 = 21;
@@ -46,7 +60,7 @@ pub(crate) fn gpu_grid_texture_ref(
 pub(crate) fn chunk_atlas_views_fit(limits: &wgpu::Limits) -> bool {
     limits.max_sampled_textures_per_shader_stage >= CHUNK_SAMPLED_TEXTURE_BINDINGS
         && limits.max_samplers_per_shader_stage >= CHUNK_SAMPLER_COUNT
-        && limits.max_bindings_per_bind_group > NATIVE_LEAF_SAMPLER_BINDING
+        && limits.max_bindings_per_bind_group > ENHANCED_TEXTURE_REF_BINDING
 }
 
 /// Terrain samples nearest texels and interpolates only between mip levels.
@@ -64,6 +78,20 @@ pub(crate) fn native_leaf_sampler_descriptor() -> wgpu::SamplerDescriptor<'stati
     }
 }
 
+pub(crate) fn pbr_sampler_descriptor() -> wgpu::SamplerDescriptor<'static> {
+    wgpu::SamplerDescriptor {
+        label: Some("enhanced linear PBR sampler"),
+        address_mode_u: wgpu::AddressMode::Repeat,
+        address_mode_v: wgpu::AddressMode::Repeat,
+        address_mode_w: wgpu::AddressMode::Repeat,
+        min_filter: wgpu::FilterMode::Linear,
+        mag_filter: wgpu::FilterMode::Linear,
+        mipmap_filter: wgpu::FilterMode::Linear,
+        anisotropy_clamp: 8,
+        ..Default::default()
+    }
+}
+
 pub(crate) fn source(source: &str) -> String {
     source
         .replace("ACTOR_LIGHT_WORLD_FLAG", &format!("{}u", render_api::ACTOR_LIGHT_WORLD))
@@ -76,6 +104,11 @@ pub(crate) fn source(source: &str) -> String {
         .replace("GPU_TEXTURE_HEIGHT_SHIFT", &format!("{TEXTURE_HEIGHT_SHIFT}u"))
         .replace("GPU_TEXTURE_DIMENSION_MASK", &format!("{TEXTURE_DIMENSION_MASK}u"))
         .replace("BLOCK_OVERLAY_FACE_OFFSET", &format!("{:?}", render_api::BLOCK_OVERLAY_FACE_OFFSET))
+        .replace("// ENHANCED_PBR_SAMPLING", include_str!("enhanced/pbr_sampling.wgsl"))
+        .replace("// ENHANCED_PBR_CONSTANTS", &format!(
+            "const PBR_REF_COLOR:u32={}u;\nconst PBR_REF_NORMAL:u32={}u;\nconst PBR_REF_HEIGHT:u32={}u;\nconst PBR_REF_MATERIAL:u32={}u;\nconst PBR_REF_LABPBR:u32={}u;\nconst PBR_REF_OCCLUSION:u32={}u;\nconst PBR_REF_SUBSURFACE:u32={}u;\nconst PBR_HEIGHT_SCALE:f32={:?};",
+            assets::PBR_REF_COLOR, assets::PBR_REF_NORMAL, assets::PBR_REF_HEIGHT, assets::PBR_REF_MATERIAL,
+            assets::PBR_REF_LABPBR, assets::PBR_REF_OCCLUSION, assets::PBR_REF_SUBSURFACE, assets::PBR_HEIGHT_SCALE))
         .replace("ACTOR_MATERIAL_GLINT", &format!("{}u", assets::EntityRenderMaterial::Glint as u32))
         .replace("ACTOR_MATERIAL_DEFAULT", &format!("{}u", assets::EntityRenderMaterial::Default as u32))
         .replace("ACTOR_MATERIAL_DRAGON", &format!("{}u", assets::EntityRenderMaterial::Dragon as u32))
@@ -164,4 +197,55 @@ pub(crate) fn source(source: &str) -> String {
             "NATIVE_LEAF_SAMPLER_BINDING",
             &NATIVE_LEAF_SAMPLER_BINDING.to_string(),
         )
+        .replace(
+            "PBR_NORMAL_TEXTURE_BINDING_0",
+            &PBR_NORMAL_TEXTURE_BINDINGS[0].to_string(),
+        )
+        .replace(
+            "PBR_NORMAL_TEXTURE_BINDING_1",
+            &PBR_NORMAL_TEXTURE_BINDINGS[1].to_string(),
+        )
+        .replace(
+            "PBR_MER_TEXTURE_BINDING_0",
+            &PBR_MER_TEXTURE_BINDINGS[0].to_string(),
+        )
+        .replace(
+            "PBR_MER_TEXTURE_BINDING_1",
+            &PBR_MER_TEXTURE_BINDINGS[1].to_string(),
+        )
+        .replace("PBR_SAMPLER_BINDING", &PBR_SAMPLER_BINDING.to_string())
+        .replace(
+            "ENHANCED_COLOR_TEXTURE_BINDING_0",
+            &ENHANCED_COLOR_TEXTURE_BINDINGS[0].to_string(),
+        )
+        .replace(
+            "ENHANCED_COLOR_TEXTURE_BINDING_1",
+            &ENHANCED_COLOR_TEXTURE_BINDINGS[1].to_string(),
+        )
+        .replace(
+            "ENHANCED_NORMAL_TEXTURE_BINDING_0",
+            &ENHANCED_NORMAL_TEXTURE_BINDINGS[0].to_string(),
+        )
+        .replace(
+            "ENHANCED_NORMAL_TEXTURE_BINDING_1",
+            &ENHANCED_NORMAL_TEXTURE_BINDINGS[1].to_string(),
+        )
+        .replace(
+            "ENHANCED_MER_TEXTURE_BINDING_0",
+            &ENHANCED_MER_TEXTURE_BINDINGS[0].to_string(),
+        )
+        .replace(
+            "ENHANCED_MER_TEXTURE_BINDING_1",
+            &ENHANCED_MER_TEXTURE_BINDINGS[1].to_string(),
+        )
+        .replace("ENHANCED_SAMPLER_BINDING", &ENHANCED_SAMPLER_BINDING.to_string())
+        .replace(
+            "ENHANCED_TEXTURE_REF_BINDING",
+            &ENHANCED_TEXTURE_REF_BINDING.to_string(),
+        )
+}
+
+/// Loads generated material contracts with the shader source.
+pub(crate) fn shader(source: impl Into<String>, path: impl Into<String>) -> bevy::shader::Shader {
+    crate::shader_safety::from_wgsl(self::source(&source.into()), path)
 }

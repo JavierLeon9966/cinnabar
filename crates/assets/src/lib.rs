@@ -273,6 +273,8 @@ pub use texture::{
     MAX_TILE_SIZE, MIP_COUNT, TERRAIN_QUAD_SHIFT_MASK, TILE_SIZE, TextureArray, TextureMip,
     VANILLA_TERRAIN_MIP_COUNT, build_legacy_terrain_mip_chain, build_texture_mip_chain,
     downsample_linear_premultiplied, legacy_terrain_mip, rebuild_legacy_terrain_mips,
+    PBR_HEIGHT_SCALE, PBR_REF_COLOR, PBR_REF_HEIGHT, PBR_REF_LABPBR,
+    PBR_REF_MATERIAL, PBR_REF_NORMAL, PBR_REF_OCCLUSION, PBR_REF_SUBSURFACE, PBR_TILE_SIZE,
 };
 pub use ui::{
     MAX_UI_ATLAS_PAGES, MAX_UI_ATLAS_SIDE, MAX_UI_CARRIER_BYTES, MAX_UI_FILE_BYTES, MAX_UI_FILES,

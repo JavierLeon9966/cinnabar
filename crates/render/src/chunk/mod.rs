@@ -99,8 +99,12 @@ mod presentation;
 #[cfg(feature = "publication-test-support")]
 mod publication_test_support;
 mod queue;
+#[cfg(feature = "enhanced")]
+mod resident_coverage;
 mod resource_geometry;
 pub use instance::ChunkRenderInstance;
+#[cfg(feature = "enhanced")]
+pub(crate) use resident_coverage::ChunkResidentCoverage;
 mod texture_reload;
 mod textures;
 pub use texture_reload::ChunkTextureReload;
@@ -156,10 +160,9 @@ use gpu::bind_groups::{
     ChunkGpuTextureAssets, MaterialGpu, PreparedChunkBiomeTints, PreparedChunkTextureAssets,
     bind_group_needs_rebuild, biome_tint_bind_group_needs_rebuild,
     biome_tint_gpu_buffer_needs_rebuild, chunk_sampler_descriptor, encode_model_template_words,
-    init_chunk_gpu_animation_clock, pack_linear_rgb10, padded_mip_bytes,
-    prepare_biome_tint_entries, prepare_chunk_animation_clock, prepare_chunk_bind_group,
-    prepare_chunk_biome_tints, prepare_chunk_texture_assets, storage_table_fits,
-    upload_texture_page,
+    init_chunk_gpu_animation_clock, pack_linear_rgb10, prepare_biome_tint_entries,
+    prepare_chunk_animation_clock, prepare_chunk_bind_group, prepare_chunk_biome_tints,
+    prepare_chunk_texture_assets, storage_table_fits,
 };
 #[allow(unused_imports)]
 use gpu::graphics_metadata::{adapter_metadata_field, publish_graphics_runtime_metadata};
@@ -173,6 +176,8 @@ use gpu::layout::{
     advance_arena_migration, arena_capacities, begin_arena_migration, buffer_byte_len,
     checked_align_up, first_arena_growth, plan_arena_growth, write_geometry_stream_words,
 };
+#[allow(unused_imports)]
+use gpu::texture_upload::{padded_mip_bytes, upload_texture_page};
 #[allow(unused_imports)]
 use gpu::types::{
     ArenaAllocation, ChunkDepthLiquidIndirectBatches, ChunkDrawMode, ChunkIndirectBatch,
@@ -246,9 +251,10 @@ use queue::{
 };
 pub use textures::{
     AnimationFrameSample, ChunkAnimationClock, ChunkTextureAssetIdentity, ChunkTextureAssets,
-    TextureArrayLimits, TextureLimitError, TextureMipUploadPlan, TexturePageBinding,
-    TextureUploadPlanError, diagnostic_texture_page, greedy_texture_uv, plan_texture_mip_uploads,
-    plan_texture_page_bindings, select_animation_frames, texture_asset_needs_rebuild,
+    EnhancedTextureAssets, TextureArrayLimits, TextureLimitError, TextureMipUploadPlan,
+    TexturePageBinding, TextureUploadPlanError, diagnostic_texture_page, greedy_texture_uv,
+    plan_texture_mip_uploads, plan_texture_page_bindings, select_animation_frames,
+    texture_asset_needs_rebuild,
 };
 #[allow(unused_imports)]
 use transparent::face_metric::{FaceOrderCamera, FaceOrderClass, TransparentFaceMetric};
