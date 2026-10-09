@@ -9,7 +9,9 @@ use crate::runtime::phase3_evidence::{
 };
 #[cfg(feature = "acceptance")]
 use crate::runtime::shutdown::finish_acceptance_run;
-use std::{ffi::OsStr, fs, sync::Arc};
+#[cfg(test)]
+use std::fs;
+use std::{ffi::OsStr, sync::Arc};
 
 use anyhow::{Context, Result, bail};
 use bevy::{
@@ -29,6 +31,7 @@ use render::{
     RuntimeStageProfiler, UiRenderPlugin, VisibilityDiagnosticsInput,
 };
 mod startup;
+use startup::bind_direct_session_directory;
 
 #[cfg(feature = "acceptance")]
 use crate::acceptance::world_ready::emit_world_ready;
@@ -85,7 +88,7 @@ use crate::{
         synchronize_semantic_input_authority,
     },
     session::{SessionController, drive_session, follow_server_transfer, recover_session_failure},
-    session_cleanup::{ScopedSessionDirectory, reclaim_stale_session_directories},
+    session_cleanup::reclaim_stale_session_directories,
     survival_mining::{SurvivalMiningRuntime, produce_survival_mining},
     ui_runtime::{
         drain_inventory_authority, drive_chat_keyboard_input, drive_chat_ui_actions,
@@ -409,36 +412,6 @@ pub(crate) fn configure_client_runtime_frame_systems(app: &mut App) {
                 .after(FlyCameraUpdateSet),
         )
         .add_systems(Last, arm_shutdown_watchdog);
-}
-
-/// Binds the identity-checked session-directory owner for direct starts.
-///
-/// Only app-derived directories carry the `direct-<pid>` naming grammar the
-/// guard enforces. A flag-provided `--socket-dir` belongs to the operator
-/// (documented custom layouts predate the ownership guard) and its leaf may
-/// violate that grammar, so binding it would abort startup with
-/// `InvalidName`; such sessions own no runtime directory and leave the
-/// provided directory exactly as supplied, after preserving the historical
-/// side effect that it exists. Teardown order is unchanged: the core child
-/// is stopped by the explicit `drop(app)` below before any app-owned state
-/// is released, and an unowned directory is never removed.
-fn bind_direct_session_directory(
-    args: &args::ClientArgs,
-    socket_dir: std::path::PathBuf,
-) -> Result<ScopedSessionDirectory> {
-    if args.address.is_some() && !args.socket_dir_explicit {
-        return ScopedSessionDirectory::bind(socket_dir.clone()).with_context(|| {
-            format!(
-                "prepare direct-connect session directory {}",
-                socket_dir.display()
-            )
-        });
-    }
-    if args.address.is_some() {
-        fs::create_dir_all(&socket_dir)
-            .with_context(|| format!("prepare socket directory {}", socket_dir.display()))?;
-    }
-    Ok(ScopedSessionDirectory::none())
 }
 
 pub fn run(args: args::ClientArgs) -> Result<()> {
