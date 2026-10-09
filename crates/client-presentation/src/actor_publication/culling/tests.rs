@@ -6,6 +6,7 @@ use crate::presentation::actors::{
 };
 use bevy::prelude::PerspectiveProjection;
 
+/// Builds camera and publication views for the requested shadow mode.
 fn views(casts_shadows: bool) -> ActorPublicationViews {
     ActorPublicationViews::new(
         &Transform::IDENTITY,
@@ -14,6 +15,7 @@ fn views(casts_shadows: bool) -> ActorPublicationViews {
     )
 }
 
+/// Places a diagnostic remote actor at the requested world position.
 fn remote(id: u64, feet: [f32; 3]) -> crate::presentation::actors::ActorRigPresentation {
     local_diagnostic_presentation(1, 0, id, 1, feet, 0.0, 0.0).unwrap()
 }
@@ -66,7 +68,7 @@ fn offscreen_casters_publish_and_animate_only_for_enhanced_shadows() {
 }
 
 #[test]
-fn visible_actors_keep_capacity_before_offscreen_casters() {
+fn visible_actors_precede_offscreen_casters_without_capping_publication() {
     let views = views(true);
     let remotes = (1..=render_model::MAX_RENDERED_PLAYERS as u64 + 1).map(|id| {
         remote(
@@ -86,7 +88,8 @@ fn visible_actors_keep_capacity_before_offscreen_casters() {
         Some(views.main),
         Some(views.publication),
     );
-    assert_eq!(batch.submissions.len(), render_model::MAX_RENDERED_PLAYERS);
+    assert_eq!(batch.submissions.len(), render_model::MAX_RENDERED_PLAYERS + 1);
+    assert_eq!(batch.submissions[0].input.identity.runtime_id, render_model::MAX_RENDERED_PLAYERS as u64 + 1);
     assert!(
         batch
             .submissions
@@ -96,6 +99,7 @@ fn visible_actors_keep_capacity_before_offscreen_casters() {
     );
 }
 
+/// Builds a minimal rig fixture without authored skin geometry.
 fn rig() -> ActorRigSnapshot<'static> {
     ActorRigSnapshot {
         actor: client_world::ActorLifetimeId {
@@ -120,6 +124,7 @@ fn rig() -> ActorRigSnapshot<'static> {
         render: &[],
         bone_names: &[],
         skin_geometry: None,
+        skin_mesh: None,
         skin_layers: &[],
         hand: [client_world::HandPhase::default(); 2],
         item_animation: [client_world::ItemAnimationState::default(); 2],

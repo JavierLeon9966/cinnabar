@@ -243,6 +243,7 @@ fn native_module(name: &str, shadow: bool) -> naga::Module {
 }
 
 pub(super) fn native_instance() -> wgpu::Instance {
+    #[cfg_attr(not(target_os = "windows"), allow(unused_mut))]
     let mut settings = bevy::render::settings::WgpuSettings::default();
     #[cfg(target_os = "windows")]
     super::configure_enhanced_shader_compiler(&mut settings);

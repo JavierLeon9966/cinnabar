@@ -264,6 +264,16 @@ fn apply_menu_render_mode(
     menu.sync_enhanced_quality(settings.user_settings_update().1.video.enhanced_quality);
 }
 
+/// Retains launch-time diagnostic bounds when a camera's quality changes.
+fn camera_settings(quality: EnhancedQuality) -> EnhancedRendering {
+    let settings = EnhancedRendering::for_quality(quality);
+    #[cfg(feature = "enhanced-diagnostics")]
+    if render_model::enhanced_diagnostics_enabled() {
+        return settings.bounded_diagnostic();
+    }
+    settings
+}
+
 /// Original depth usage, restored when opting out of Enhanced.
 #[derive(Component)]
 struct VanillaDepthUsage(Camera3dDepthTextureUsage);
@@ -291,13 +301,7 @@ fn apply_render_mode_to_cameras(
                 let original = camera.depth_texture_usages;
                 camera.depth_texture_usages =
                     (TextureUsages::from(original) | TextureUsages::TEXTURE_BINDING).into();
-                let enhanced_settings = EnhancedRendering::for_quality(video.enhanced_quality);
-                #[cfg(feature = "enhanced-diagnostics")]
-                let enhanced_settings = if render_model::enhanced_diagnostics_enabled() {
-                    EnhancedRendering::bounded_diagnostic()
-                } else {
-                    enhanced_settings
-                };
+                let enhanced_settings = camera_settings(video.enhanced_quality);
                 commands.entity(entity).insert((
                     enhanced_settings,
                     Hdr,
@@ -322,7 +326,7 @@ fn apply_render_mode_to_cameras(
             let shadow_debug = current.shadow_debug;
             *current = EnhancedRendering {
                 shadow_debug,
-                ..EnhancedRendering::for_quality(video.enhanced_quality)
+                ..camera_settings(video.enhanced_quality)
             };
         }
     }
@@ -744,4 +748,24 @@ mod tests {
             TextureUsages::from(original),
         );
     }
+
+    #[cfg(feature = "enhanced-diagnostics")]
+    #[test]
+    fn diagnostic_quality_changes_keep_cameras_within_the_launch_budget() {
+        render_model::enable_enhanced_diagnostics(render_model::ENHANCED_DIAGNOSTIC_MAX_VIEWPORT).unwrap();
+        let mut app = App::new();
+        app.init_resource::<RuntimeSettings>().add_systems(Update, apply_render_mode_to_cameras);
+        let camera = app.world_mut().spawn((Camera3d::default(), FlyCamera::default())).id();
+        for quality in [EnhancedQuality::Performance, EnhancedQuality::Balanced, EnhancedQuality::Ultra] {
+            set_graphics_settings(&mut app.world_mut().resource_mut::<RuntimeSettings>(), RenderMode::Enhanced, quality);
+            app.update();
+            let current = app.world().get::<EnhancedRendering>(camera).unwrap();
+            let bounded = EnhancedRendering::for_quality(quality).bounded_diagnostic();
+            assert_eq!(current.quality, quality);
+            assert!(current.shadow_resolution <= bounded.shadow_resolution);
+            assert!(current.shadow_distance <= bounded.shadow_distance);
+            assert!(!current.waving);
+        }
+    }
+
 }

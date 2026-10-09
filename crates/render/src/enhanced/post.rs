@@ -638,7 +638,7 @@ impl ViewNode for EnhancedPostNode {
                     source,
                     opaque: state.scene.as_ref().map_or(black, |scene| &scene.mips[0]),
                     shafts,
-                    depth: depth.view(),
+                    depth: &depth.view,
                     opaque_depth: state
                         .scene
                         .as_ref()
@@ -683,7 +683,7 @@ impl ViewNode for EnhancedPostNode {
             &state.frame,
             &state.exposure,
             target.main_texture_view(),
-            depth.view(),
+            &depth.view,
             post_targets.size,
         ) {
             return Ok(());

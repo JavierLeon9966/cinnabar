@@ -46,6 +46,7 @@ fn enhanced_pipelines_compile_through_async_cache() {
             .thread_name("Async Compute Task Pool".to_owned())
             .build()
     });
+    #[cfg_attr(not(target_os = "windows"), allow(unused_mut))]
     let mut settings = bevy::render::settings::WgpuSettings {
         backends: Some(if cfg!(target_os = "windows") {
             wgpu::Backends::DX12

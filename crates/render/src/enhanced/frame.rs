@@ -591,7 +591,7 @@ mod tests {
     #[cfg(feature = "enhanced-diagnostics")]
     #[test]
     fn diagnostic_limits_preserve_the_requested_shadow_target_size() {
-        let settings = EnhancedRendering::bounded_diagnostic();
+        let settings = EnhancedRendering::default().bounded_diagnostic();
         let inputs = ViewInputs {
             clip_from_world: Mat4::IDENTITY,
             world_from_clip: Mat4::IDENTITY,

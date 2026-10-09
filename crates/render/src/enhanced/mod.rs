@@ -216,16 +216,20 @@ impl Default for EnhancedRendering {
     }
 }
 
+/// Maximum shadow reach admitted for hidden development captures.
+#[cfg(feature = "enhanced-diagnostics")]
+const DIAGNOSTIC_SHADOW_DISTANCE: f32 = 24.0;
+
 #[cfg(feature = "enhanced-diagnostics")]
 impl EnhancedRendering {
     /// Bounds the actual Enhanced passes for hidden development captures.
     #[must_use]
-    pub fn bounded_diagnostic() -> Self {
+    pub fn bounded_diagnostic(self) -> Self {
         Self {
             shadow_resolution: MIN_SHADOW_RESOLUTION,
-            shadow_distance: 24.0,
+            shadow_distance: DIAGNOSTIC_SHADOW_DISTANCE,
             waving: false,
-            ..Self::default()
+            ..self
         }
     }
 }

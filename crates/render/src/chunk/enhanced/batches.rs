@@ -246,7 +246,6 @@ pub(super) fn prepare_enhanced_geometry(
         adapter.get_downlevel_capabilities().flags,
         device.features(),
         Backends::from(adapter.get_info().backend),
-        cfg!(debug_assertions),
     );
     if matches!(mode, ChunkDrawMode::Unsupported) {
         if !cache.batches.is_empty() {
