@@ -179,6 +179,26 @@ impl Plugin for EnhancedRenderPlugin {
             "indirect_compute.wgsl",
             crate::shader_safety::from_wgsl
         );
+    }
+
+    fn finish(&self, app: &mut App) {
+        if !enhanced_rendering_enabled() {
+            return;
+        }
+        let support = app
+            .get_sub_app(RenderApp)
+            .and_then(|app| {
+                app.world()
+                    .get_resource::<bevy::render::renderer::RenderDevice>()
+            })
+            .map_or(EnhancedRenderSupport(false), |device| {
+                EnhancedRenderSupport::for_device_limits(&device.limits())
+            });
+        app.insert_resource(support);
+        if !support.0 {
+            warn!("Enhanced rendering exceeds this device's binding limits; using Vanilla");
+            return;
+        }
         probes::install(app);
         app.add_systems(Last, enforce_single_sample_depth);
         let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
@@ -209,15 +229,6 @@ impl Plugin for EnhancedRenderPlugin {
             temporal::prepare_jitter.in_set(RenderSystems::ManageViews),
         );
         crate::chunk::enhanced::install_geometry_cache(render_app);
-    }
-
-    fn finish(&self, app: &mut App) {
-        if !enhanced_rendering_enabled() {
-            return;
-        }
-        let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
-            return;
-        };
         render_app
             .init_resource::<EnhancedGpu>()
             .init_resource::<cloud_noise::CloudNoiseVolume>()

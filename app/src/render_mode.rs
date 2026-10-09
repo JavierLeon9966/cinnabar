@@ -290,10 +290,13 @@ type RenderModeCameraQuery = (
 fn apply_render_mode_to_cameras(
     mut commands: Commands,
     settings: Res<RuntimeSettings>,
+    support: Option<Res<render::EnhancedRenderSupport>>,
     mut cameras: Query<RenderModeCameraQuery, With<FlyCamera>>,
 ) {
     let video = settings.user_settings_update().1.video;
-    let enhanced = enhanced_rendering_enabled() && video.render_mode == RenderMode::Enhanced;
+    let enhanced = enhanced_rendering_enabled()
+        && support.is_none_or(|support| support.0)
+        && video.render_mode == RenderMode::Enhanced;
     for (entity, mut camera, current_enhanced, vanilla_depth) in &mut cameras {
         let has_enhanced = current_enhanced.is_some();
         if enhanced != has_enhanced {
@@ -696,6 +699,26 @@ mod tests {
         assert!(app.world().get::<EnhancedRendering>(camera).is_none());
         assert!(app.world().get::<Hdr>(camera).is_none());
         assert!(app.world().get::<Bloom>(camera).is_none());
+    }
+
+    #[cfg(feature = "enhanced")]
+    #[test]
+    fn unsupported_adapter_keeps_requested_enhanced_cameras_vanilla() {
+        let mut app = App::new();
+        app.init_resource::<RuntimeSettings>()
+            .insert_resource(render::EnhancedRenderSupport(false))
+            .add_systems(Update, apply_render_mode_to_cameras);
+        let camera = app
+            .world_mut()
+            .spawn((Camera3d::default(), FlyCamera::default()))
+            .id();
+        set_render_mode(
+            &mut app.world_mut().resource_mut::<RuntimeSettings>(),
+            RenderMode::Enhanced,
+        );
+        app.update();
+        assert!(app.world().get::<EnhancedRendering>(camera).is_none());
+        assert!(app.world().get::<Hdr>(camera).is_none());
     }
 
     /// Explicit Enhanced mode adds camera effects and Vanilla restores the original camera.

@@ -601,3 +601,35 @@ impl<P: PhaseItem, const I: usize> RenderCommand<P> for SetEnhancedViewBindGroup
         RenderCommandResult::Success
     }
 }
+
+#[cfg(test)]
+mod capability_tests {
+    use super::*;
+
+    #[test]
+    fn combined_enhanced_layout_rejects_a_vanilla_capable_adapter() {
+        let mut limits = wgpu::Limits::default();
+        assert!(crate::material_shader::chunk_atlas_views_fit(&limits));
+        assert!(!super::super::EnhancedRenderSupport::for_device_limits(&limits).0);
+        let textures = crate::material_shader::CHUNK_SAMPLED_TEXTURE_BINDINGS
+            + enhanced_view_layout()
+                .entries
+                .iter()
+                .filter(|entry| matches!(entry.ty, BindingType::Texture { .. }))
+                .count() as u32;
+        limits.max_sampled_textures_per_shader_stage = textures;
+        assert!(super::super::EnhancedRenderSupport::for_device_limits(&limits).0);
+        limits.max_sampled_textures_per_shader_stage -= 1;
+        assert!(!super::super::EnhancedRenderSupport::for_device_limits(&limits).0);
+        limits.max_sampled_textures_per_shader_stage = textures;
+        limits.max_samplers_per_shader_stage = crate::material_shader::CHUNK_SAMPLER_COUNT
+            + enhanced_view_layout()
+                .entries
+                .iter()
+                .filter(|entry| matches!(entry.ty, BindingType::Sampler(_)))
+                .count() as u32;
+        assert!(super::super::EnhancedRenderSupport::for_device_limits(&limits).0);
+        limits.max_samplers_per_shader_stage -= 1;
+        assert!(!super::super::EnhancedRenderSupport::for_device_limits(&limits).0);
+    }
+}

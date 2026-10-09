@@ -132,6 +132,43 @@ const PROBE_SHADER: Handle<Shader> = uuid_handle!("4a37ec08-5f88-40b9-8ad1-ef4f0
 const ENHANCED_POST_SHADER_HANDLE: Handle<Shader> =
     uuid_handle!("9b7e2c15-3f4a-4d8b-a6e2-7c1d0f5b3a84");
 
+/// Whether this device can bind every group in the Enhanced world pipeline.
+#[derive(Resource, Clone, Copy, Debug)]
+pub struct EnhancedRenderSupport(pub bool);
+
+impl EnhancedRenderSupport {
+    /// Checks the device limits before Enhanced pipelines or cameras are created.
+    pub fn for_device_limits(limits: &wgpu::Limits) -> Self {
+        #[cfg(feature = "enhanced")]
+        {
+            use bevy::render::render_resource::BindingType;
+            let layout = gpu::enhanced_view_layout();
+            let textures = layout
+                .entries
+                .iter()
+                .filter(|entry| matches!(entry.ty, BindingType::Texture { .. }))
+                .count() as u32;
+            let samplers = layout
+                .entries
+                .iter()
+                .filter(|entry| matches!(entry.ty, BindingType::Sampler(_)))
+                .count() as u32;
+            Self(
+                crate::material_shader::chunk_atlas_views_fit(limits)
+                    && limits.max_sampled_textures_per_shader_stage
+                        >= crate::material_shader::CHUNK_SAMPLED_TEXTURE_BINDINGS + textures
+                    && limits.max_samplers_per_shader_stage
+                        >= crate::material_shader::CHUNK_SAMPLER_COUNT + samplers,
+            )
+        }
+        #[cfg(not(feature = "enhanced"))]
+        {
+            let _ = limits;
+            Self(false)
+        }
+    }
+}
+
 /// Per-camera opt-in for Enhanced rendering, with resolved depth for post effects.
 #[derive(Component, ExtractComponent, Clone, Copy, Debug, PartialEq)]
 #[require(Msaa::Off, bevy::render::camera::TemporalJitter)]
