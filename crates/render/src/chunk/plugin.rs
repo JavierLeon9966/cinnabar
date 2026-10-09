@@ -72,6 +72,8 @@ impl Plugin for ChunkRenderPlugin {
                 ),
             );
 
+        #[cfg(feature = "enhanced")]
+        app.init_resource::<ChunkResidentCoverage>();
         if app.get_sub_app(RenderApp).is_none() {
             return;
         }

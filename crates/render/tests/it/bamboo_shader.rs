@@ -1,9 +1,14 @@
 //! Execute production model vertices with packed offsets and ordinary quarter turns.
 use crate::{
     gpu_snapshot::{Draw, Gpu, SNAPSHOT_SIDE},
-    shader_source,
+    material_shader, shader_source,
 };
 
+const FRAME_BINDING: u32 = material_shader::ENHANCED_TEXTURE_REF_BINDING + 1;
+const LIGHTMAP_BINDING: u32 = FRAME_BINDING + 7;
+const OUTPUT_BINDING: u32 = LIGHTMAP_BINDING + 1;
+
+/// Moves fixture resources beyond the production terrain bindings.
 fn source() -> String {
     let source = shader_source::standalone(include_str!("../../src/model.wgsl"), &["ENHANCED"])
         .replace("@vertex\nfn vertex(", "fn model_vertex(")
@@ -15,14 +20,20 @@ fn source() -> String {
             "@builtin(instance_index) instance_index: u32",
             "instance_index: u32",
         )
-        .replace("@group(1) @binding(0)", "@group(0) @binding(30)");
+        .replace(
+            "@group(1) @binding(0)",
+            &format!("@group(0) @binding({LIGHTMAP_BINDING})"),
+        );
     let source = (0..7).fold(source, |source, binding| {
         source.replace(
             &format!("@group(2) @binding({binding})"),
-            &format!("@group(0) @binding({})", binding + 20),
+            &format!("@group(0) @binding({})", binding + FRAME_BINDING),
         )
     });
-    format!("{source}\n{WITNESS}")
+    format!(
+        "{source}\n{}",
+        WITNESS.replace("OUTPUT_BINDING", &OUTPUT_BINDING.to_string())
+    )
 }
 
 #[test]
@@ -99,10 +110,13 @@ fn bamboo_offsets_do_not_rotate_enhanced_surface_normals() {
         (11, clock.as_entire_binding()),
         (12, templates.as_entire_binding()),
         (13, geometry.as_entire_binding()),
-        (20, frame.as_entire_binding()),
-        (23, wgpu::BindingResource::TextureView(&classes)),
-        (31, output.as_entire_binding()),
-        (30, lightmap.as_entire_binding()),
+        (FRAME_BINDING, frame.as_entire_binding()),
+        (
+            FRAME_BINDING + 3,
+            wgpu::BindingResource::TextureView(&classes),
+        ),
+        (OUTPUT_BINDING, output.as_entire_binding()),
+        (LIGHTMAP_BINDING, lightmap.as_entire_binding()),
     ]
     .map(|(binding, resource)| wgpu::BindGroupEntry { binding, resource });
     let group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -128,7 +142,7 @@ fn bamboo_offsets_do_not_rotate_enhanced_surface_normals() {
     if let Some(path) = std::env::var_os("CINNABAR_BAMBOO_SHADER_CAPTURE") {
         let bindings: Vec<_> = bindings
             .into_iter()
-            .filter(|binding| binding.binding != 31)
+            .filter(|binding| binding.binding != OUTPUT_BINDING)
             .collect();
         let pixels = gpu.render(
             &source,
@@ -249,7 +263,7 @@ fn geometry_words() -> Vec<u32> {
 }
 
 const WITNESS: &str = r#"
-@group(0) @binding(31) var<storage, read_write> results: array<vec4<f32>>;
+@group(0) @binding(OUTPUT_BINDING) var<storage, read_write> results: array<vec4<f32>>;
 @compute @workgroup_size(1) fn witness(@builtin(global_invocation_id) id: vec3<u32>) {
     let vertex = model_vertex(0u, id.x);
     results[id.x * 3u] = vec4(vertex.normal, f32(vertex.visible & MODEL_VISIBLE));

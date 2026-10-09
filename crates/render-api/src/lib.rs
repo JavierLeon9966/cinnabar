@@ -7,6 +7,7 @@ mod actor_lighting;
 mod frame_rate_limit;
 pub mod primitive_shapes;
 mod publication;
+mod quality;
 mod skin;
 
 pub use actor_lighting::{
@@ -16,6 +17,7 @@ pub use frame_rate_limit::FrameRateLimit;
 pub use publication::{
     PublicationAllowance, PublicationPermit, PublicationPermitStage, PublicationServiceConfig,
 };
+pub use quality::EnhancedQuality;
 pub use skin::{
     CLASSIC_SKIN_SIDE, MAX_CLASSIC_SKIN_SIDE, MAX_SKIN_ANIMATION_LAYERS, MAX_STANDARD_SKIN_SIDE,
     SkinRgba8, expand_legacy_skin_rgba8,
