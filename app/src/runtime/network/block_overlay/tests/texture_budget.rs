@@ -129,10 +129,9 @@ fn budget_rejected_runs_do_not_materialize_visuals_or_item_indices() {
     }
 }
 
-/// A stack needing more textures than the former 2,048-layer ceiling must admit
-/// them all: a served stack legitimately names thousands of distinct textures.
+/// Large stacks retain supported routes and use diagnostic visuals only after capacity.
 #[test]
-fn a_larger_texture_array_admits_every_routed_texture() {
+fn larger_overlays_keep_every_texture_that_fits_the_device() {
     let previous = super::super::MAX_OVERLAY_LAYERS;
     assert!(
         previous >= 4096,
@@ -211,9 +210,66 @@ fn a_larger_texture_array_admits_every_routed_texture() {
         vanilla_blocks: Default::default(),
         skipped: 0,
     };
-    let compiled = compile_block_overlay(&view, &blocks, false, None).expect("overlay");
-    assert_eq!(compiled.gaps.saturated_textures, 0);
-    assert_eq!(compiled.gaps.missing_textures, 0);
-    let layers = compiled.overlay.texture.as_ref().expect("array").layers;
-    assert_eq!(layers, u32::try_from(wanted + 1).unwrap());
+    for limit in [256, 2048, 4096, assets::MAX_TEXTURE_LAYERS as u32 + 1] {
+        let compiled = super::super::compile_block_overlay(&view, &blocks, false, None, limit)
+            .expect("overlay");
+        let admitted = (wanted as u32 + 1)
+            .min(limit)
+            .min(assets::MAX_TEXTURE_LAYERS as u32);
+        let refused = wanted as u32 + 1 - admitted;
+        assert_eq!(compiled.gaps.saturated_textures, refused);
+        assert_eq!(compiled.gaps.missing_textures, refused);
+        let texture = compiled.overlay.texture.as_ref().expect("array");
+        assert_eq!(texture.layers, admitted);
+        render::TextureArrayLimits {
+            max_layers: limit,
+            max_dimension_2d: assets::MAX_TILE_SIZE,
+        }
+        .validate(texture.layers, texture.mips[0].size)
+        .expect("uploadable overlay");
+        let runtime = RuntimeAssets::diagnostic()
+            .with_block_overlay(1, &compiled.overlay)
+            .expect("supported replacement is retained");
+        assert_eq!(runtime.texture_pages()[1].texture.layers, admitted);
+        for (index, visual) in compiled.overlay.visuals.iter().enumerate() {
+            let reference = compiled.overlay.materials[visual.faces[0] as usize].texture;
+            assert_eq!(reference.page(), 1);
+            assert_eq!(
+                reference.layer(),
+                if index < admitted as usize - 1 {
+                    index as u32 + 1
+                } else {
+                    0
+                }
+            );
+        }
+    }
+}
+
+#[test]
+fn flipbooks_use_only_the_device_layers_remaining_after_the_diagnostic() {
+    let blocks = CustomBlocks {
+        blocks: vec![generator()].into(),
+        ..Default::default()
+    };
+    for limit in [1, 2, 3] {
+        let compiled =
+            super::super::compile_block_overlay(&view(), &blocks, false, None, limit).unwrap();
+        assert_eq!(compiled.overlay.texture.as_ref().unwrap().layers, limit);
+        assert!(
+            compiled
+                .overlay
+                .animation_frames
+                .iter()
+                .all(|frame| frame.layer() < limit)
+        );
+        assert!(
+            compiled
+                .overlay
+                .materials
+                .iter()
+                .all(|material| material.texture.layer() < limit)
+        );
+    }
+    assert!(super::super::compile_block_overlay(&view(), &blocks, false, None, 0).is_none());
 }

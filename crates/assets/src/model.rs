@@ -152,7 +152,8 @@ pub(crate) const fn model_template_flags_are_valid(flags: u32) -> bool {
 }
 
 const TEXTURE_PAGE_BIT: u32 = 1 << 31;
-const TEXTURE_LAYER_MASK: u32 = 0x1fff;
+/// Layer bits shared by carrier references and GPU shader encoders.
+pub const TEXTURE_LAYER_MASK: u32 = crate::MAX_TEXTURE_LAYERS as u32 - 1;
 const TEXTURE_RESERVED_MASK: u32 = !(TEXTURE_PAGE_BIT | TEXTURE_LAYER_MASK);
 
 /// Canonical reference to a layer in one of at most two texture-array pages.

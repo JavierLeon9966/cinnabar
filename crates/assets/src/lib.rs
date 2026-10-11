@@ -234,7 +234,8 @@ pub use model::{
     MODEL_TEMPLATE_FLAG_TRANSPARENT_CUBE, MODEL_TEMPLATE_FLAG_WALL, ModelQuad, ModelTemplate,
     NETHER_PORTAL_IDENTIFIER, NO_ANIMATION, NO_MODEL_TEMPLATE, SEASONAL_LEAF_DEEP_OFFSET,
     SEASONAL_LEAF_EXPOSED_OFFSET, SEASONAL_LEAF_MATERIAL_COUNT, SNOWED_GRASS_SIDE_TEXTURE,
-    TOP_SNOW_LAYER_COUNT, TexturePage, TextureRef, VisualKind, VisualSupport, model_template_parts,
+    TEXTURE_LAYER_MASK, TOP_SNOW_LAYER_COUNT, TexturePage, TextureRef, VisualKind, VisualSupport,
+    model_template_parts,
 };
 pub use ogg::{decode_ogg, decode_sound};
 pub use particle::{

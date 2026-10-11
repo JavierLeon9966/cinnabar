@@ -7,7 +7,23 @@ use protocol::{
 };
 use resource_pack::LayeredPackView;
 
-use super::{OverlayGaps, compile_block_overlay};
+use super::OverlayGaps;
+
+/// Compiles non-device fixtures against the full reference capacity.
+fn compile_block_overlay(
+    view: &LayeredPackView,
+    blocks: &CustomBlocks,
+    hashed: bool,
+    keys: Option<&assets::MaterialKeys>,
+) -> Option<super::CompiledBlockOverlay> {
+    super::compile_block_overlay(
+        view,
+        blocks,
+        hashed,
+        keys,
+        assets::MAX_TEXTURE_LAYERS as u32,
+    )
+}
 
 mod budget;
 mod builtins;
