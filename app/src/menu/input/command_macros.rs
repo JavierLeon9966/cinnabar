@@ -1,5 +1,5 @@
 //! Command drafts stay editable while only valid commands reach persisted settings.
-use super::field_editor;
+use super::fields::field_editor;
 use crate::menu::MenuRuntime;
 use launcher::menu::MenuField;
 use launcher::menu::settings_options::{COMMAND_MACRO_COUNT, SettingsOptions};

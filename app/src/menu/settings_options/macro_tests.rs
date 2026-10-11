@@ -14,7 +14,10 @@ use client_ui::ui_runtime::{UiRuntime, presentation::UiPresentationRuntime};
 use launcher::menu::{MenuAction, MenuField, MenuScreen};
 use semantic_input::{Action, PhysicalControl};
 
-use crate::{menu::MenuRuntime, semantic_controls::SemanticInputSnapshot};
+use crate::menu::MenuRuntime;
+use client_state::SemanticInputSnapshot;
+
+mod regression;
 
 /// Arms one command without changing the ordinary gameplay bindings.
 fn arm(app: &mut App, control: PhysicalControl) {
@@ -94,7 +97,7 @@ fn command_macro_space_types_arguments_in_native_settings() {
     let view = app.world().resource::<MenuRuntime>().view();
     let player = app
         .world()
-        .resource::<crate::player_runtime::PlayerRuntime>()
+        .resource::<client_state::PlayerRuntime>()
         .clone();
     {
         let mut presentation = app.world_mut().resource_mut::<UiPresentationRuntime>();
@@ -123,8 +126,7 @@ fn command_macro_space_types_arguments_in_native_settings() {
     let mut view = menu.view();
     view.focused_action = Some(MenuAction::SettingsMacroCommand(0));
     client_ui::test_support::snapshot_menu(
-        app.world()
-            .resource::<crate::player_runtime::PlayerRuntime>(),
+        app.world().resource::<client_state::PlayerRuntime>(),
         &view,
         "command-macro-spaces",
     );
@@ -189,7 +191,7 @@ fn command_macro_consumes_only_its_keyboard_control_even_when_enqueue_fails() {
         app.update();
         let keys = app.world().resource::<ButtonInput<KeyCode>>();
         assert!(keys.pressed(KeyCode::KeyW), "{rejection:?}");
-        assert!(!keys.pressed(KeyCode::Space), "{rejection:?}");
+        assert!(keys.pressed(KeyCode::Space), "{rejection:?}");
         assert!(
             app.world()
                 .resource::<ButtonInput<MouseButton>>()
@@ -247,7 +249,7 @@ fn command_macro_mouse_press_is_dispatched_and_consumed_in_both_routes() {
                 "{ordered} {button:?}"
             );
             assert!(
-                !app.world()
+                app.world()
                     .resource::<ButtonInput<MouseButton>>()
                     .pressed(button)
             );
@@ -309,7 +311,7 @@ fn command_macro_invalid_draft_does_not_replace_the_saved_command() {
     let mut view = menu.view();
     view.focused_action = Some(MenuAction::SettingsMacroCommand(0));
     client_ui::test_support::snapshot_menu(
-        &crate::player_runtime::PlayerRuntime::new(1),
+        &client_state::PlayerRuntime(player_state::PlayerState::new(1)),
         &view,
         "command-macro-validation",
     );

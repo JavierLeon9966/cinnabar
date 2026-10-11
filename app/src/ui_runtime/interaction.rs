@@ -1,7 +1,7 @@
 mod chat;
 mod chat_coordinates;
 pub(crate) mod chat_modifiers;
-mod command_macros;
+pub(super) mod command_macros;
 mod inventory;
 pub(crate) use chat::drive_chat_ui_actions;
 
@@ -434,7 +434,8 @@ pub(crate) fn drive_chat_keyboard_input(
         cursor.visible = true;
         return;
     }
-    if runtime.server_forms().owns_input()
+    if runtime.sign_editor().is_open()
+        || runtime.server_forms().owns_input()
         || runtime.emotes().is_open()
         || emote_input.is_some_and(|consumed| consumed.0)
         || presentation
@@ -473,7 +474,7 @@ pub(crate) fn drive_chat_keyboard_input(
                 now_millis,
                 semantic.as_deref_mut(),
             ) {
-                mouse_buttons.reset(button);
+                mouse_buttons.clear_just_pressed(button);
             }
         }
     }
@@ -544,7 +545,7 @@ pub(crate) fn drive_chat_keyboard_input(
                 now_millis,
                 semantic.as_deref_mut(),
             ) {
-                mouse_buttons.reset(button);
+                mouse_buttons.clear_just_pressed(button);
                 continue;
             }
             let (route, toggled_inventory) = route_press(
@@ -675,6 +676,9 @@ pub(crate) fn drive_chat_keyboard_input(
             continue;
         }
         if !runtime.chat_focused() {
+            if input.repeat {
+                continue;
+            }
             if command_macros::dispatch(
                 menu.as_deref(),
                 &mut runtime,
@@ -684,7 +688,7 @@ pub(crate) fn drive_chat_keyboard_input(
                 now_millis,
                 semantic.as_deref_mut(),
             ) {
-                keys.reset(input.key_code);
+                keys.clear_just_pressed(input.key_code);
                 continue;
             }
             match input.key_code {
@@ -820,7 +824,7 @@ pub(crate) fn drive_chat_keyboard_input(
                 now_millis,
                 semantic.as_deref_mut(),
             ) {
-                mouse_buttons.reset(button);
+                mouse_buttons.clear_just_pressed(button);
                 continue;
             }
             let (route, toggled_inventory) = route_press(

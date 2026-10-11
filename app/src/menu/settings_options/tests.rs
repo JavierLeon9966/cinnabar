@@ -1,7 +1,8 @@
 use semantic_input::{InputContext, PhysicalControl};
 use {
     crate::menu::settings_options::control_bindings::{
-        binding_key, binding_mouse, binding_pressed, gamepad_button, hotbar_control_slots,
+        binding_key, binding_macro_command, binding_mouse, binding_pressed, gamepad_button,
+        hotbar_control_slots,
     },
     launcher::menu::settings_options::{
         EXTRA_KEYS, GAMEPAD_BINDINGS, GAMEPAD_OFFSET, KEY_BINDINGS, SETTINGS_FILE,

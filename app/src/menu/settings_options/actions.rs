@@ -1,7 +1,10 @@
 //! Settings actions stay separate from launcher navigation.
 
 use std::sync::Arc;
-use {crate::menu::MenuRuntime, launcher::menu::{MenuAction, MenuField, settings_options::macro_row}};
+use {
+    crate::menu::MenuRuntime,
+    launcher::menu::{MenuAction, MenuField, settings_options::macro_row},
+};
 
 impl MenuRuntime {
     /// Applies settings navigation and edits without starting a game session.

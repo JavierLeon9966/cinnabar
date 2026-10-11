@@ -7351,7 +7351,10 @@ No visual parity or hardware performance gate closes with this extension.
   that control even if the queue refuses the send, without resetting other held
   controls or pointer motion. Mouse buttons use the same macro dispatch. A leading
   slash is added for commands typed without one; macros do nothing while a menu,
-  chat box or inventory owns input.
+  chat box, inventory, sign editor or emote wheel owns input. Keyboard macros
+  fire once per physical press; consumed controls stay suppressed until release.
+  Clicking or tapping a native command box places its caret at the selected
+  character.
 - Incomplete parity: Bedrock's exact per-slot key names, default bindings and
   command-box editing affordances are unverified, as is macro behaviour over the
   JSON-UI settings fallback. Macros run client-side, so a server rejecting the

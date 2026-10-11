@@ -14,15 +14,10 @@ pub(super) fn dispatch(
     now_millis: u64,
     semantic: Option<&mut SemanticInputRuntime>,
 ) -> bool {
-    if !alt || runtime.chat_focused() || runtime.inventory_open() || runtime.local_sleeping() {
-        return false;
-    }
     let Some(control) = control else {
         return false;
     };
-    let Some(command) =
-        crate::menu::settings_options::control_bindings::binding_macro_command(menu, control)
-    else {
+    let Some(command) = command(menu, runtime, alt, Some(control)) else {
         return false;
     };
     let _ = runtime.queue_chat_message(&command, now_millis);
@@ -30,6 +25,28 @@ pub(super) fn dispatch(
         semantic.consume_control(control);
     }
     true
+}
+
+/// Resolves an armed gameplay shortcut before ordinary bindings claim its press.
+pub(in crate::ui_runtime) fn command(
+    menu: Option<&MenuRuntime>,
+    runtime: &UiRuntime,
+    alt: bool,
+    control: Option<PhysicalControl>,
+) -> Option<String> {
+    if !alt
+        || menu.is_some_and(MenuRuntime::is_visible)
+        || runtime.chat_focused()
+        || runtime.inventory_open()
+        || runtime.local_sleeping()
+        || runtime.sign_editor().is_open()
+        || runtime.emotes().is_open()
+        || runtime.server_forms().owns_input()
+        || runtime.credits().owns_input()
+    {
+        return None;
+    }
+    crate::menu::settings_options::control_bindings::binding_macro_command(menu, control?)
 }
 
 /// Matches pointer presses using the same binding codes as capture and gameplay.

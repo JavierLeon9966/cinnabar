@@ -1,6 +1,8 @@
 //! Physical input and preference handoff for the native JSON-UI emote wheel.
 mod controls;
+use super::interaction::{chat_modifiers, command_macros};
 use bevy::{
+    ecs::message::{MessageCursor, Messages},
     ecs::system::SystemParam,
     input::{
         ButtonState,
@@ -10,8 +12,9 @@ use bevy::{
     },
     prelude::*,
     time::Real,
-    window::{CursorGrabMode, CursorOptions, PrimaryWindow},
+    window::{CursorGrabMode, CursorOptions, PrimaryWindow, WindowEvent},
 };
+use client_ui::ui_runtime::interaction::ordered_pointer_presses;
 use client_ui::ui_runtime::presentation::forms::EmoteHit;
 use launcher::menu::settings_options::EMOTE_SLOT_COUNT;
 use ui::{UiAction, UiPoint};
@@ -20,7 +23,7 @@ use client_ui::ui_runtime::{UiRuntime, presentation::UiPresentationRuntime};
 use {
     crate::menu::MenuRuntime,
     crate::menu::settings_options::control_bindings::{
-        binding_gamepad, binding_key, binding_mouse, gamepad_button,
+        binding_gamepad, binding_key, gamepad_button,
     },
     crate::runtime::world::ClientWorld,
     client_state::PlayerRuntime,
@@ -35,6 +38,7 @@ pub(crate) struct ObservedEmotes {
     identity: Option<(u64, u64, i32, u64)>,
     preferences: Option<Option<SlotPreferences>>,
     pointer: Option<UiPoint>,
+    modifiers: ButtonInput<KeyCode>,
 }
 
 /// Keeps a closing wheel's physical input from becoming chat or inventory input.
@@ -49,6 +53,8 @@ pub(crate) struct EmoteInput<'w, 's> {
     mouse: ResMut<'w, ButtonInput<MouseButton>>,
     motion: ResMut<'w, AccumulatedMouseMotion>,
     keyboard: MessageReader<'w, 's, KeyboardInput>,
+    window_events: Option<Res<'w, Messages<WindowEvent>>>,
+    window_cursor: Local<'s, MessageCursor<WindowEvent>>,
     pads: Query<'w, 's, &'static Gamepad>,
     menu: Option<ResMut<'w, MenuRuntime>>,
     consent: Option<Res<'w, crate::server_experiences::input::ConsentInput>>,
@@ -66,6 +72,11 @@ pub(crate) struct EmoteInput<'w, 's> {
 /// Runs before chat/menu adapters and before semantic gameplay is finalized.
 pub(crate) fn drive_emote_input(mut input: EmoteInput) {
     input.consumed.0 = false;
+    let pointer_presses = if let Some(events) = input.window_events.as_deref() {
+        ordered_pointer_presses(input.window_cursor.read(events))
+    } else {
+        Vec::new()
+    };
     let mut owned = input.runtime.emotes().is_open();
     let runtime_id = input.runtime.local_runtime_id(&input.player);
     let stream = input
@@ -112,6 +123,7 @@ pub(crate) fn drive_emote_input(mut input: EmoteInput) {
         || input.runtime.local_sleeping()
         || actor_unavailable;
     if blocked {
+        input.observed.modifiers.reset_all();
         input.keyboard.clear();
         input.runtime.emotes_mut().close();
         input.runtime.emotes_mut().stop();
@@ -124,6 +136,7 @@ pub(crate) fn drive_emote_input(mut input: EmoteInput) {
         && (!input.window.0.focused || input.focus.as_ref().is_some_and(|focus| !focus.available()))
     {
         input.keyboard.clear();
+        input.observed.modifiers.reset_all();
         input.keys.reset_all();
         input.mouse.reset_all();
         input.motion.delta = Vec2::ZERO;
@@ -143,7 +156,39 @@ pub(crate) fn drive_emote_input(mut input: EmoteInput) {
         .0
         .cursor_position()
         .and_then(|position| UiPoint::new(position.x, position.y).ok());
-    let mouse_toggled = binding_mouse(input.menu.as_deref(), "key.emote", &input.mouse);
+    let keyboard: Vec<_> = input.keyboard.read().cloned().collect();
+    chat_modifiers::capture_before_events(&mut input.observed.modifiers, &input.keys, &keyboard);
+    let mouse_toggled = input.mouse.get_just_pressed().any(|button| {
+        if !crate::menu::settings_options::control_bindings::binding_mouse_button(
+            input.menu.as_deref(),
+            "key.emote",
+            *button,
+        ) {
+            return false;
+        }
+        let alt = if pointer_presses.is_empty() {
+            chat_modifiers::alt_held(&input.keys)
+        } else {
+            pointer_presses
+                .iter()
+                .filter(|(_, candidate)| candidate == button)
+                .any(|(before, _)| {
+                    let mut held = input.observed.modifiers.clone();
+                    for event in keyboard.iter().take(*before) {
+                        chat_modifiers::track(&mut held, event);
+                    }
+                    chat_modifiers::alt_held(&held)
+                })
+        };
+        command_macros::command(
+            input.menu.as_deref(),
+            &input.runtime,
+            alt,
+            crate::semantic_controls::physical::mouse_button_code(*button)
+                .map(semantic_input::PhysicalControl::MouseButton),
+        )
+        .is_none()
+    });
     // An open wheel owns D-pad selection, including the default opening button.
     let navigating =
         input.runtime.emotes().is_open() && controls::directional_navigation(&input.pads);
@@ -164,8 +209,21 @@ pub(crate) fn drive_emote_input(mut input: EmoteInput) {
         dismissed |= was_open && !input.runtime.emotes().is_open();
         owned = true;
     }
-    for event in input.keyboard.read() {
+    for event in &keyboard {
+        chat_modifiers::track(&mut input.observed.modifiers, event);
         if event.state != ButtonState::Pressed || event.repeat {
+            continue;
+        }
+        if binding_key(input.menu.as_deref(), "key.emote", event.key_code)
+            && command_macros::command(
+                input.menu.as_deref(),
+                &input.runtime,
+                chat_modifiers::alt_held(&input.observed.modifiers),
+                crate::semantic_controls::keyboard_usage(event.key_code)
+                    .map(semantic_input::PhysicalControl::KeyboardUsage),
+            )
+            .is_some()
+        {
             continue;
         }
         if binding_key(input.menu.as_deref(), "key.emote", event.key_code) {
@@ -281,6 +339,7 @@ pub(crate) fn drive_emote_input(mut input: EmoteInput) {
     }
     if owned {
         input.consumed.0 = true;
+        input.observed.modifiers.reset_all();
         input.keys.reset_all();
         input.mouse.reset_all();
         input.motion.delta = Vec2::ZERO;
