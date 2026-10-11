@@ -393,7 +393,15 @@ fn draw_macro_command(
         right,
         middle + content.canvas.r(2.4),
     ];
-    widgets::text_field_on_panel(
+    let capture_focus = content.canvas.capture_focus;
+    if error.is_some() {
+        // Reveal the field and error together without enlarging pointer caret targets.
+        content
+            .canvas
+            .focus_target(action, [field[0], bounds[1], field[2], bounds[3]])?;
+        content.canvas.capture_focus = false;
+    }
+    let result = widgets::text_field_on_panel(
         content.canvas,
         content.view,
         field,
@@ -401,7 +409,9 @@ fn draw_macro_command(
         &placeholder,
         focused,
         Some(action),
-    )?;
+    );
+    content.canvas.capture_focus = capture_focus;
+    result?;
     if let Some(error) = error {
         content.canvas.text(
             &error,

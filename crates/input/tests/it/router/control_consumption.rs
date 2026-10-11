@@ -10,12 +10,13 @@ fn consuming_a_control_preserves_other_input_and_rearms_after_release() {
         };
         let mut router = SemanticInputRouter::default();
         let keyboard = KeyboardMouseFrame {
+            activity_sequence: 1,
             keys: vec![0x1a, 0x2c],
             mouse_buttons: vec![1, 2],
             mouse_motion: [3.0, 2.0],
             ..Default::default()
         };
-        let frame = DeviceFrame {
+        let mut frame = DeviceFrame {
             keyboard_mouse: Some(keyboard.clone()),
             ..Default::default()
         };
@@ -32,6 +33,7 @@ fn consuming_a_control_preserves_other_input_and_rearms_after_release() {
         }
         router.finalize().unwrap();
         let mut released = keyboard;
+        released.activity_sequence = 2;
         match control {
             PhysicalControl::KeyboardUsage(code) => released.keys.retain(|key| *key != code),
             PhysicalControl::MouseButton(code) => {
@@ -46,6 +48,7 @@ fn consuming_a_control_preserves_other_input_and_rearms_after_release() {
             })
             .unwrap();
         router.finalize().unwrap();
+        frame.keyboard_mouse.as_mut().unwrap().activity_sequence = 3;
         router.route(frame).unwrap();
         let sample = router.finalize().unwrap();
         assert!(sample.phases[action as usize].pressed);

@@ -224,6 +224,9 @@ fn command_macro_mouse_press_is_dispatched_and_consumed_in_both_routes() {
             MouseButton::Middle,
             MouseButton::Back,
             MouseButton::Forward,
+            MouseButton::Other(5),
+            MouseButton::Other(6),
+            MouseButton::Other(7),
         ] {
             let mut app = crate::tests::gameplay_click::gameplay_app(false);
             app.add_message::<WindowEvent>();
