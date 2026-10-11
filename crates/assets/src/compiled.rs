@@ -47,7 +47,10 @@ impl BlockFace {
 }
 
 pub const DIAGNOSTIC_MATERIAL: u32 = 0;
-pub const MAX_TEXTURE_LAYERS: usize = 2_048;
+/// Physical array layers in one texture page. A served stack can name more
+/// distinct custom textures than a single vanilla atlas holds, so the ceiling is
+/// generous; the device's own array-layer limit is checked when a page is bound.
+pub const MAX_TEXTURE_LAYERS: usize = 8_192;
 pub const MAX_MATERIALS: usize = 65_536;
 pub const MATERIAL_FLAG_ROTATE_UV: u32 = 1 << 0;
 pub const MATERIAL_FLAG_UV_MASK: u32 = 0x0000_000f;

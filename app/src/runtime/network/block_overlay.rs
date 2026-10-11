@@ -39,7 +39,7 @@ const FULL_BLOCK: &str = "minecraft:geometry.full_block";
 const FULL_BLOCK_V1: &str = "minecraft:geometry.full_block_v1";
 const MIN_TILE: u32 = assets::TILE_SIZE;
 const MAX_TILE: u32 = 128;
-const MAX_OVERLAY_LAYERS: usize = 2048;
+const MAX_OVERLAY_LAYERS: usize = assets::MAX_TEXTURE_LAYERS;
 const MAX_OVERLAY_TEXTURE_BYTES: usize = 64 * 1024 * 1024;
 // Held decoded sources are already shrunk to MAX_TILE; bound their total too.
 const MAX_OVERLAY_SOURCE_BYTES: usize = 64 * 1024 * 1024;
