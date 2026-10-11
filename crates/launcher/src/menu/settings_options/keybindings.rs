@@ -178,6 +178,9 @@ impl SettingsOptions {
     }
 
     /// Restores one device's full layout without disturbing bindings on the other device.
+    ///
+    /// Macro rows are keyboard and mouse only: the keyboard reset clears them
+    /// while the gamepad reset keeps them.
     pub fn reset_bindings(&mut self, gamepad: bool) {
         self.keys
             .retain(|name, _| name.starts_with("gamepad:") != gamepad);

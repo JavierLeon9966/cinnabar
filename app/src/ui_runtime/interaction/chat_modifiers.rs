@@ -45,5 +45,10 @@ pub(super) fn text_modified(held: &ButtonInput<KeyCode>) -> bool {
     MODIFIERS[..6].iter().any(|key| held.pressed(*key))
 }
 
+/// Whether either physical Alt key is held, for vanilla's Alt+key command macros.
+pub(crate) fn alt_held(held: &ButtonInput<KeyCode>) -> bool {
+    held.pressed(KeyCode::AltLeft) || held.pressed(KeyCode::AltRight)
+}
+
 #[cfg(test)]
 mod tests;

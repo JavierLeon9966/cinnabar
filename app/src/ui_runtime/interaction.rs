@@ -36,6 +36,7 @@ use client_ui::ui_runtime::presentation::{
 };
 use client_ui::ui_runtime::{PlatformClipboard, UiRuntime};
 
+use crate::ui_runtime::interaction::chat_modifiers::alt_held;
 use client_ui::ui_runtime::interaction::{
     ChatFlushError, PointerRouter, PressRoute, dispatch_chat_ui_action, dispatch_inventory_hotbar,
     flush_chat_sends, flush_inventory_send, gamepad_chat_action, is_chat_edit_shortcut,
@@ -644,6 +645,19 @@ pub(crate) fn drive_chat_keyboard_input(
             continue;
         }
         if !runtime.chat_focused() {
+            // An Alt+key macro runs its stored command, consuming the key.
+            if alt_held(&modifiers)
+                && let Some(command) = crate::menu::settings_options::binding_macro_command(
+                    menu.as_deref(),
+                    input.key_code,
+                )
+            {
+                let now_millis = u64::try_from(time.elapsed().as_millis()).unwrap_or(u64::MAX);
+                if runtime.queue_chat_message(&command, now_millis).is_ok() {
+                    consumed_gameplay = true;
+                }
+                continue;
+            }
             match input.key_code {
                 key if binding_key(menu.as_deref(), "key.inventory", key) => {
                     runtime.toggle_inventory(&mut player_runtime);

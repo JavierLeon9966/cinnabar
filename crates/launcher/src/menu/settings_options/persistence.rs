@@ -62,6 +62,7 @@ impl SettingsOptions {
             validated.set_language(language);
         }
         validated.keys = saved.keys;
+        validated.command_macros = saved.command_macros;
         validated.server_list = saved.server_list;
         if let Some(slots) = saved.emote_slots {
             validated.set_emote_slots(slots);

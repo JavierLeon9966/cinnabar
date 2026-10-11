@@ -1,6 +1,6 @@
 //! Launcher state construction and persisted settings startup.
 
-use super::input::field_editor;
+use super::input::{field_editor, macro_editors};
 #[cfg(feature = "developer-control")]
 use launcher::menu::MenuDialog;
 use launcher::menu::settings_options::{SETTINGS_FILE, SettingsOptions};
@@ -91,6 +91,7 @@ impl MenuRuntime {
             address: field_editor(MenuField::Address),
             port: field_editor(MenuField::Port),
             skin_name: field_editor(MenuField::SkinName),
+            macro_commands: macro_editors(&settings_options),
             message,
             gui_scale_preference: gui_scale
                 .filter(|scale| *scale > 0)

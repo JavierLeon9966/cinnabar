@@ -26,6 +26,8 @@ use bevy::{
 };
 use ui::{ChatClipboard, ChatEditor, ToastPress, UiPoint};
 
+use std::sync::Arc;
+use launcher::menu::settings_options::MAX_COMMAND_MACRO_BYTES;
 use client_ui::ui_runtime::{PlatformClipboard, presentation::UiPresentationRuntime};
 use launcher::local_worlds::form::{MAX_SEED_CHARS, MAX_WORLD_NAME_CHARS};
 use launcher::menu::view::MenuCaret;
@@ -221,6 +223,7 @@ impl MenuRuntime {
             MenuField::WorldName => &self.local_ui.name,
             MenuField::WorldSeed => &self.local_ui.seed,
             MenuField::SkinName => &self.skin_name,
+            MenuField::MacroCommand(slot) => &self.macro_commands[slot],
         }
     }
 
@@ -233,6 +236,7 @@ impl MenuRuntime {
             MenuField::WorldName => &mut self.local_ui.name,
             MenuField::WorldSeed => &mut self.local_ui.seed,
             MenuField::SkinName => &mut self.skin_name,
+            MenuField::MacroCommand(slot) => &mut self.macro_commands[slot],
         }
     }
 
@@ -265,6 +269,9 @@ impl MenuRuntime {
             return;
         }
         edit(self.editor_mut(field));
+        if let MenuField::MacroCommand(slot) = field {
+            self.sync_macro_command(slot);
+        }
         if field == MenuField::RealmCode
             && let Some(state) = &mut self.realm_membership.state
         {
@@ -292,6 +299,15 @@ impl MenuRuntime {
     fn selected_text(&self) -> Option<&str> {
         let editor = self.editor(self.field?);
         editor.selection().map(|range| &editor.as_str()[range])
+    }
+
+    /// Macro commands live in persisted settings, so every edit writes through.
+    fn sync_macro_command(&mut self, slot: usize) {
+        let text = self.macro_commands[slot].as_str().to_owned();
+        if Arc::make_mut(&mut self.settings_options).set_macro_command(slot, &text) {
+            self.settings_dirty = true;
+            self.settings_apply = true;
+        }
     }
 
     fn remaining_text_capacity(&self) -> usize {
@@ -368,7 +384,22 @@ fn max_bytes(field: MenuField) -> usize {
         MenuField::WorldName => MAX_WORLD_NAME_CHARS * 4,
         MenuField::WorldSeed => MAX_SEED_CHARS,
         MenuField::SkinName => launcher::dressing_room::MAX_SKIN_NAME_BYTES,
+        MenuField::MacroCommand(_) => MAX_COMMAND_MACRO_BYTES,
     }
+}
+
+/// Seeded macro command boxes, so saved commands show before the first edit.
+pub(super) fn macro_editors(
+    settings: &crate::menu::settings_options::SettingsOptions,
+) -> [ui::ChatEditor; crate::menu::settings_options::COMMAND_MACRO_COUNT] {
+    core::array::from_fn(|slot| {
+        let mut editor = field_editor(MenuField::MacroCommand(slot));
+        let command = settings.macro_command(slot);
+        if !command.is_empty() {
+            editor.set_text(command);
+        }
+        editor
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
