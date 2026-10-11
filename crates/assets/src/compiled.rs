@@ -47,10 +47,10 @@ impl BlockFace {
 }
 
 pub const DIAGNOSTIC_MATERIAL: u32 = 0;
-/// Physical array layers in one texture page. A served stack can name more
-/// distinct custom textures than a single vanilla atlas holds, so the ceiling is
-/// generous; the device's own array-layer limit is checked when a page is bound.
+/// Layer capacity of a texture reference. Runtime pages also check the device limit.
 pub const MAX_TEXTURE_LAYERS: usize = 8_192;
+/// Offline page budget for carriers that must fit a 2,048-layer device.
+pub const MAX_CARRIER_TEXTURE_LAYERS: usize = 2_048;
 /// Layer bits shared by carrier references and GPU shader encoders.
 pub const TEXTURE_LAYER_MASK: u32 = MAX_TEXTURE_LAYERS as u32 - 1;
 pub const MAX_MATERIALS: usize = 65_536;

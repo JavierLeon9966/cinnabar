@@ -14,8 +14,8 @@ use crate::{
 const TEXTURE_PAGE_BIT: u32 = 1 << 31;
 #[cfg(test)]
 const TEXTURE_LAYER_MASK: u32 = 0x1fff;
-/// Matches `assets::MAX_TEXTURE_LAYERS`, the texture-reference layer budget.
-pub(crate) const MAX_LAYERS_PER_PAGE: u32 = assets::MAX_TEXTURE_LAYERS as u32;
+/// Physical layer budget used by offline carrier pages.
+pub(crate) const MAX_LAYERS_PER_PAGE: u32 = assets::MAX_CARRIER_TEXTURE_LAYERS as u32;
 const MAX_TEXTURE_PAGES: u32 = 2;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

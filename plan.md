@@ -2620,7 +2620,9 @@ indistinguishable from unusable pack data. Which reason dominates a real session
 without a capture. Overlay admission is bounded by the active device's array-layer limit and
 `assets::MAX_TEXTURE_LAYERS`, including the diagnostic layer and flipbook frames. Excess routes
 retain diagnostic visuals while supported textures remain in the replacement atlas. Carrier and
-GPU references share the layer mask; cube, model and liquid sampling preserve it alongside
+GPU references share the layer mask. Offline carriers retain their separate
+`assets::MAX_CARRIER_TEXTURE_LAYERS` page budget, including leaf and lily-pad copies.
+Cube, model and liquid sampling preserve the layer mask alongside
 source dimensions and UV grids. Server-pack entities compile in memory per session (`compile_actor_pack`) into their own
 index space (pack rig ids from `PACK_RIG_ID_BASE`) and layer over the vanilla catalog: pack
 entities win by identifier, render scene geometry/artwork are rebuilt per session. Provisional,
