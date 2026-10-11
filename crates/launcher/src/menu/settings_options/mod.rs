@@ -22,7 +22,8 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 pub use command_macros::{
-    COMMAND_MACRO_COUNT, MAX_COMMAND_MACRO_BYTES, macro_row, macro_row_index, macro_title,
+    COMMAND_MACRO_COUNT, MAX_COMMAND_MACRO_BYTES, macro_message, macro_row, macro_row_index,
+    macro_title,
 };
 pub use control_bindings::{
     EXTRA_GAMEPAD, EXTRA_KEYS, GAMEPAD_BINDINGS, GAMEPAD_OFFSET, gamepad_icon,

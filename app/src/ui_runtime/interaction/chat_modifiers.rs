@@ -12,11 +12,6 @@ const MODIFIERS: [KeyCode; 8] = [
     KeyCode::ShiftRight,
 ];
 
-/// Seeds held modifiers from physical buttons before gameplay suppression.
-pub(crate) fn capture(held: &mut ButtonInput<KeyCode>, gameplay: &ButtonInput<KeyCode>) {
-    capture_before_events(held, gameplay, &[]);
-}
-
 /// Seeds held keys without applying a frame's later modifier edges before earlier presses.
 pub(crate) fn capture_before_events(
     held: &mut ButtonInput<KeyCode>,

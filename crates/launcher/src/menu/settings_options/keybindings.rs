@@ -90,6 +90,7 @@ impl SettingsOptions {
             .map(|binding| binding.chord.control);
         self.keys.iter().any(|(name, code)| {
             !name.starts_with("gamepad:")
+                && !name.starts_with(super::command_macros::MACRO_KEY_PREFIX)
                 && decode_control(*code).is_some_and(|control| Some(control) == default)
         })
     }

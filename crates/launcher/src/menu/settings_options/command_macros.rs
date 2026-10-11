@@ -13,12 +13,14 @@ use super::control_bindings::{decode_control, encode_control, is_gamepad};
 pub const COMMAND_MACRO_COUNT: usize = 10;
 /// Row-index base the settings UI uses to route macro rows out of the keybinding lists.
 const MACRO_OFFSET: usize = 0xc000;
+/// Persisted name prefix shared by macro rows and gameplay collision checks.
+pub(super) const MACRO_KEY_PREFIX: &str = "key.macro";
 /// Stored commands share the outbound chat packet's byte budget.
-pub const MAX_COMMAND_MACRO_BYTES: usize = 512;
+pub const MAX_COMMAND_MACRO_BYTES: usize = ui::MAX_CHAT_INPUT_BYTES;
 
 /// Persisted key name for one macro slot's binding.
 fn macro_key_name(index: usize) -> String {
-    format!("key.macro{}", index + 1)
+    format!("{MACRO_KEY_PREFIX}{}", index + 1)
 }
 
 /// The macro slot a settings row routes to, when it points at one.
@@ -47,12 +49,19 @@ impl SettingsOptions {
             .unwrap_or_default()
     }
 
-    /// Stores one macro slot's command after bounding it to sendable text.
+    /// Stores sendable command text, or clears a slot when its command is empty.
+    /// Invalid text leaves the previous stored command unchanged.
     pub fn set_macro_command(&mut self, index: usize, command: &str) -> bool {
         if index >= COMMAND_MACRO_COUNT {
             return false;
         }
-        let sanitized = sanitize_macro_command(command);
+        let sanitized: String = command
+            .chars()
+            .filter(|character| !character.is_control())
+            .collect();
+        if !sanitized.is_empty() && macro_message(&sanitized).is_err() {
+            return false;
+        }
         if self.macro_command(index) == sanitized {
             return false;
         }
@@ -118,28 +127,25 @@ impl SettingsOptions {
         if index >= COMMAND_MACRO_COUNT || command.is_empty() {
             return None;
         }
-        if command.starts_with('/') {
-            Some(command.to_owned())
-        } else {
-            Some(format!("/{command}"))
-        }
+        macro_message(command).ok()
     }
 }
 
+/// Creates an untouched command store.
 fn empty_macros() -> [Option<String>; COMMAND_MACRO_COUNT] {
     core::array::from_fn(|_| None)
 }
 
-/// Bounds stored commands to one chat packet without control characters.
-fn sanitize_macro_command(command: &str) -> String {
-    let mut sanitized = String::new();
-    for character in command.chars().filter(|character| !character.is_control()) {
-        if sanitized.len() + character.len_utf8() > MAX_COMMAND_MACRO_BYTES {
-            break;
-        }
-        sanitized.push(character);
-    }
-    sanitized
+/// Adds the command slash and applies the outbound chat text limits.
+pub fn macro_message(command: &str) -> Result<String, ui::ChatSendError> {
+    ui::validate_chat_message(command)?;
+    let message = if command.starts_with('/') {
+        command.to_owned()
+    } else {
+        format!("/{command}")
+    };
+    ui::validate_chat_message(&message)?;
+    Ok(message)
 }
 
 #[cfg(test)]
@@ -164,13 +170,69 @@ mod tests {
     }
 
     #[test]
-    fn macro_commands_are_bounded_without_control_characters() {
+    fn command_macro_rejects_messages_over_the_final_slash_budget() {
         let mut settings = SettingsOptions::default();
-        settings.set_macro_command(0, &format!("say {}\n\t{}", "x".repeat(600), "y"));
-        let stored = settings.macro_command(0);
-        assert!(stored.len() <= MAX_COMMAND_MACRO_BYTES);
-        assert!(!stored.chars().any(char::is_control));
-        assert!(stored.starts_with("say "));
+        let budget = ui::MAX_CHAT_INPUT_BYTES;
+        for command in [
+            "x".repeat(budget),
+            format!("/{}", "x".repeat(budget)),
+            "é".repeat(budget / 2),
+        ] {
+            assert!(!settings.set_macro_command(0, &command));
+            assert_eq!(settings.macro_command(0), "");
+        }
+        for command in [
+            "x".repeat(budget - 1),
+            format!("/{}", "x".repeat(budget - 1)),
+        ] {
+            assert!(settings.set_macro_command(0, &command));
+            let message = settings.macro_send_text(0).unwrap();
+            let mut queue =
+                ui::ChatSendQueue::new(1, ui::ChatRateLimit::new(1, 1000).unwrap()).unwrap();
+            assert!(queue.push(1, &message, 0).is_ok());
+        }
+    }
+
+    #[test]
+    fn command_macro_keeps_unmodified_late_defaults() {
+        for action in [
+            semantic_input::Action::Freelook,
+            semantic_input::Action::InteractWithToast,
+        ] {
+            let defaults = SettingsOptions::default().controls().unwrap();
+            let binding = defaults
+                .bindings()
+                .iter()
+                .find(|binding| binding.action == action)
+                .unwrap();
+            let mut settings = SettingsOptions::default();
+            assert!(settings.remap_macro(0, binding.chord.control));
+            for command in ["", "time set day"] {
+                settings.set_macro_command(0, command);
+                assert!(settings.controls().unwrap().bindings().contains(binding));
+            }
+        }
+    }
+
+    #[test]
+    fn macro_commands_filter_controls_without_truncating_oversized_commands() {
+        let mut settings = SettingsOptions::default();
+        assert!(settings.set_macro_command(0, "say hello\n\t"));
+        assert_eq!(settings.macro_command(0), "say hello");
+        assert!(!settings.set_macro_command(0, &"x".repeat(ui::MAX_CHAT_INPUT_BYTES)));
+        assert_eq!(settings.macro_command(0), "say hello");
+    }
+
+    #[test]
+    fn invalid_saved_command_macros_are_dropped_without_losing_valid_slots() {
+        let mut saved = SettingsOptions::default();
+        let mut commands = empty_macros();
+        commands[0] = Some("x".repeat(ui::MAX_CHAT_INPUT_BYTES));
+        commands[1] = Some("say hello".to_owned());
+        saved.command_macros = Some(commands);
+        let loaded = SettingsOptions::decode(&serde_json::to_vec(&saved).unwrap()).unwrap();
+        assert_eq!(loaded.macro_command(0), "");
+        assert_eq!(loaded.macro_send_text(1).as_deref(), Some("/say hello"));
     }
 
     #[test]

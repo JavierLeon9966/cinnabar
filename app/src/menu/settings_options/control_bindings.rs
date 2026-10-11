@@ -80,18 +80,17 @@ pub(crate) fn binding_mouse(
         .any(|button| binding_mouse_button(menu, name, *button))
 }
 
-/// The command a key press runs through an armed Alt+key macro, if any.
+/// The command a physical press runs through an armed Alt+key macro, if any.
 pub(crate) fn binding_macro_command(
     menu: Option<&crate::menu::MenuRuntime>,
-    key: bevy::prelude::KeyCode,
+    control: PhysicalControl,
 ) -> Option<String> {
-    let code = crate::semantic_controls::keyboard_usage(key)?;
-    let defaults = super::SettingsOptions::default();
+    let defaults = launcher::menu::settings_options::SettingsOptions::default();
     let settings = match menu {
         Some(menu) => &*menu.settings_options,
         None => &defaults,
     };
-    let slot = settings.match_macro(PhysicalControl::KeyboardUsage(code))?;
+    let slot = settings.match_macro(control)?;
     settings.macro_send_text(slot)
 }
 

@@ -31,7 +31,8 @@ use {
     client_ui::test_support::fixture_font,
 };
 
-fn gameplay_app(menu_visible: bool) -> App {
+/// Builds the production input chain with a focused gameplay window.
+pub(crate) fn gameplay_app(menu_visible: bool) -> App {
     let mut player_runtime = PlayerRuntime(player_state::PlayerState::new(1));
     let mut app = App::new();
     configure_client_frame_schedule(&mut app);

@@ -1,7 +1,7 @@
 //! Settings registry sections share the launcher’s persisted options and binding actions.
 
 use super::super::super::super::UiPresentationError;
-use super::super::theme::{self, BODY, EDGE, NEUTRAL80, TEXT};
+use super::super::theme::{self, BODY, CAPTION, EDGE, NEUTRAL80, TEXT, TEXT_DIMMER};
 use super::super::widgets::{self, Interaction};
 use super::{Content, button};
 use launcher::menu::{
@@ -10,8 +10,8 @@ use launcher::menu::{
         ANIMATIONS_OPTION, CHAT_POSITION_OPTION, COMMAND_MACRO_COUNT, EXTRA_GAMEPAD, EXTRA_KEYS,
         GAMEPAD_BINDINGS, GAMEPAD_OFFSET, INVERT_CROSSHAIR_OPTION, KEY_BINDINGS,
         MOTION_BLUR_OPTION, SMAA_OPTION, SettingsGroup, SettingsOptions,
-        THIRD_PERSON_CROSSHAIR_OPTION, VOLUME_SETTINGS, key_name, macro_row, macro_row_index,
-        macro_title,
+        THIRD_PERSON_CROSSHAIR_OPTION, VOLUME_SETTINGS, key_name, macro_message, macro_row,
+        macro_row_index, macro_title,
     },
     settings_support::{SupportAction, SupportDialog, SupportLink},
 };
@@ -353,12 +353,40 @@ fn draw_macro_command(
     slot: usize,
 ) -> Result<(), UiPresentationError> {
     let action = MenuAction::SettingsMacroCommand(slot);
-    let command = content.view.settings_options.macro_command(slot).to_owned();
+    let command = content
+        .view
+        .macro_commands
+        .as_ref()
+        .map_or_else(
+            || content.view.settings_options.macro_command(slot),
+            |drafts| drafts[slot].as_str(),
+        )
+        .to_owned();
     let focused = content.view.field == Some(MenuField::MacroCommand(slot));
     let placeholder = content.word("options.commandMacro.placeholder");
     let [left, right] = content.inset();
-    let bounds = content.row("", "", right - left, Some(action), content.canvas.r(2.8))?;
-    let middle = (bounds[1] + bounds[3]) * 0.5;
+    let error = (!command.is_empty() && macro_message(&command).is_err()).then(|| {
+        format!(
+            "Command is too long. Include the slash within the {}-byte chat limit.",
+            ui::MAX_CHAT_INPUT_BYTES
+        )
+    });
+    let error_height = if let Some(error) = &error {
+        content
+            .canvas
+            .measure_height(error, right - left, CAPTION)?
+            + content.canvas.r(0.4)
+    } else {
+        0.0
+    };
+    let bounds = content.row(
+        "",
+        "",
+        right - left,
+        Some(action),
+        content.canvas.r(2.8) + error_height,
+    )?;
+    let middle = (bounds[1] + bounds[3] - error_height) * 0.5;
     let field = [
         left,
         middle - content.canvas.r(2.4),
@@ -373,7 +401,18 @@ fn draw_macro_command(
         &placeholder,
         focused,
         Some(action),
-    )
+    )?;
+    if let Some(error) = error {
+        content.canvas.text(
+            &error,
+            [left, field[3] + content.canvas.r(0.4)],
+            right - left,
+            CAPTION,
+            TEXT_DIMMER,
+            false,
+        )?;
+    }
+    Ok(())
 }
 
 fn controller(content: &mut Content<'_, '_>) -> Result<(), UiPresentationError> {

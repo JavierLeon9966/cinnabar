@@ -1,6 +1,7 @@
 //! Launcher state construction and persisted settings startup.
 
-use super::input::{field_editor, macro_editors};
+use super::input::command_macros::macro_editors;
+use super::input::field_editor;
 #[cfg(feature = "developer-control")]
 use launcher::menu::MenuDialog;
 use launcher::menu::settings_options::{SETTINGS_FILE, SettingsOptions};
