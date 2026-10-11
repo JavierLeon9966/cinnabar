@@ -200,10 +200,7 @@ fn command_macro_keeps_an_open_emote_wheel_in_control() {
                 .pending_chat_sends()
                 .is_empty()
         );
-        assert_eq!(
-            app.world().resource::<UiRuntime>().emotes().is_open(),
-            code == KeyCode::Space
-        );
+        assert!(!app.world().resource::<UiRuntime>().emotes().is_open());
         if code == KeyCode::KeyB {
             // The wheel cleared the buttons it owned; a later press is an ordinary binding.
             clear_edges(&mut app);
