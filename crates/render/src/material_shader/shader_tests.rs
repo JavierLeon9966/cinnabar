@@ -128,15 +128,15 @@ fn assert_world_shader_addresses(source: &str) {
 
 #[test]
 fn cube_samples_preserve_layers_and_exclude_metadata() {
-    assert_world_shader_addresses(include_str!("../chunk.wgsl"));
+    assert_world_shader_addresses(include_str!("../chunk.wesl"));
 }
 
 #[test]
 fn model_samples_preserve_layers_and_exclude_metadata() {
-    assert_world_shader_addresses(include_str!("../model.wgsl"));
+    assert_world_shader_addresses(include_str!("../model.wesl"));
 }
 
 #[test]
 fn liquid_samples_preserve_layers_and_exclude_metadata() {
-    assert_world_shader_addresses(include_str!("../liquid.wgsl"));
+    assert_world_shader_addresses(include_str!("../liquid.wesl"));
 }

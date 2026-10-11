@@ -27,6 +27,7 @@ fn compile_block_overlay(
 
 mod budget;
 mod builtins;
+mod capacity;
 mod legacy;
 mod lighting;
 mod random_offset;

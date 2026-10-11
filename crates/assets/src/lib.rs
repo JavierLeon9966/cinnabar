@@ -119,7 +119,7 @@ pub use compiled::{
     MATERIAL_FLAG_WATER_TINT, MATERIAL_FLAGS_MASK, MATERIAL_LEAF_AO_EXPONENT_MASK,
     MATERIAL_LEAF_AO_EXPONENT_MAX, MATERIAL_LEAF_AO_EXPONENT_SCALE,
     MATERIAL_LEAF_AO_EXPONENT_SHIFT, MATERIAL_LEAF_METADATA_MASK, MAX_MATERIALS,
-    MAX_TEXTURE_LAYERS, Material, material_leaf_ao_exponent,
+    MAX_TEXTURE_LAYERS, Material, TEXTURE_LAYER_MASK, material_leaf_ao_exponent,
 };
 pub use effects::{
     EFFECT_DESCRIPTORS, EffectDescriptor, effect_descriptor, effect_registry_version,
@@ -234,8 +234,7 @@ pub use model::{
     MODEL_TEMPLATE_FLAG_TRANSPARENT_CUBE, MODEL_TEMPLATE_FLAG_WALL, ModelQuad, ModelTemplate,
     NETHER_PORTAL_IDENTIFIER, NO_ANIMATION, NO_MODEL_TEMPLATE, SEASONAL_LEAF_DEEP_OFFSET,
     SEASONAL_LEAF_EXPOSED_OFFSET, SEASONAL_LEAF_MATERIAL_COUNT, SNOWED_GRASS_SIDE_TEXTURE,
-    TEXTURE_LAYER_MASK, TOP_SNOW_LAYER_COUNT, TexturePage, TextureRef, VisualKind, VisualSupport,
-    model_template_parts,
+    TOP_SNOW_LAYER_COUNT, TexturePage, TextureRef, VisualKind, VisualSupport, model_template_parts,
 };
 pub use ogg::{decode_ogg, decode_sound};
 pub use particle::{
