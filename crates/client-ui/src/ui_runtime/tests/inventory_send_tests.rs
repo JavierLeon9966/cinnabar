@@ -51,6 +51,7 @@ fn drop_key_admits_creative_grid_and_recipe_book_items() {
         open_personal_inventory(ledger);
         ledger.apply_registry(&protocol::ItemRegistryEvent {
             entries: Arc::from([protocol::ItemRegistryEntry {
+                components: None,
                 identifier: Arc::from("minecraft:apple"),
                 network_id: 1,
                 component_based: false,
@@ -78,7 +79,7 @@ fn drop_key_admits_creative_grid_and_recipe_book_items() {
             &mut player,
             &mut runtime,
             Some(hit),
-            bevy::prelude::KeyCode::KeyQ,
+            semantic_input::KeyboardKey::KeyQ,
             false,
             None,
             true,
@@ -105,6 +106,7 @@ fn creative_group_drop_matches_the_icons_retained_user_data() {
     open_personal_inventory(ledger);
     ledger.apply_registry(&protocol::ItemRegistryEvent {
         entries: Arc::from([protocol::ItemRegistryEntry {
+            components: None,
             identifier: Arc::from("minecraft:enchanted_book"),
             network_id: 1,
             component_based: false,
@@ -158,7 +160,7 @@ fn creative_group_drop_matches_the_icons_retained_user_data() {
         &mut player,
         &mut runtime,
         Some(InventoryCellHit::RecipeBook(0)),
-        bevy::prelude::KeyCode::KeyQ,
+        semantic_input::KeyboardKey::KeyQ,
         false,
         None,
         true,

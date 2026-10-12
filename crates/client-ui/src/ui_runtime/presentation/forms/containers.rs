@@ -14,10 +14,12 @@ use std::sync::Arc;
 use ui::UiNode;
 
 use super::container_data;
-use super::container_kinds::{
-    Cell, ContainerKind, mount_kind, mount_slots, storage_kind, window_kind,
+use super::container_kinds::{Cell, ContainerKind, mount_kind, storage_kind, window_kind};
+use super::engine::{
+    self,
+    screen::{CustomRenderer, PaintFrame},
 };
-use super::engine;
+use super::{item_renderer::ItemRenderer, menu_renderers::PreviewRenderer};
 use {
     super::super::{HudFrame, TextMetrics, UiPresentationError, UiPresentationRuntime},
     ui::IconRef,
@@ -65,9 +67,9 @@ impl ScreenLayout {
             InventoryScreen::Personal | InventoryScreen::Creative => Self::Personal { book },
             InventoryScreen::Workbench => Self::Workbench { book },
             InventoryScreen::Storage(slots) => Self::Station(storage_kind(slots, block_entity)),
-            InventoryScreen::Window(protocol::WindowKind::Horse, _) => Self::Station(mount_kind(
-                mount_slots(runtime.screen_state().mount_identifier.as_deref()),
-            )),
+            InventoryScreen::Window(protocol::WindowKind::Horse, _) => {
+                Self::Station(mount_kind(runtime.screen_state().mount_equipment))
+            }
             InventoryScreen::Window(kind, _) => Self::Station(window_kind(kind)?),
             InventoryScreen::Book => Self::Book,
         })
@@ -114,7 +116,7 @@ impl UiPresentationRuntime {
         else {
             return Ok(false);
         };
-        let Some(renderer) = self.form_presentation.engine.as_deref() else {
+        let Some(renderer) = self.engine.as_deref() else {
             return Ok(false);
         };
         let (reference, title_key) = layout.screen();
@@ -156,8 +158,8 @@ impl UiPresentationRuntime {
             &title,
             &mut icons,
             (
-                &mut self.form_presentation.book_cache,
-                &mut self.form_presentation.furnace_cache,
+                &mut self.screens.book_cache,
+                &mut self.screens.furnace_cache,
             ),
         );
         let pointer = runtime.inventory_pointer_gui();
@@ -203,20 +205,26 @@ impl UiPresentationRuntime {
             .and_then(|_| tooltip_text(&self.hud_frame.window_text.tooltip));
         let preview_view = std::cell::Cell::new(None);
         let art = engine::ScreenArt {
-            icons: &icons,
-            id_aux: &id_aux,
             view: Some(&view),
             tooltip: tooltip.as_deref(),
-            preview: self.hud_frame.player_preview,
-            preview_view: Some(&preview_view),
             pointer,
-            now: self.menu_seconds,
             clocks: Some(&self.scene_clock),
+            overlay: &overlay,
             ..engine::ScreenArt::default()
         };
+        let mut items = ItemRenderer {
+            icons: &icons,
+            id_aux: &id_aux,
+        };
+        let mut preview = PreviewRenderer {
+            preview: self.hud_frame.player_preview,
+            view: Some(&preview_view),
+            ..PreviewRenderer::default()
+        };
+        let mut renderers: [&mut dyn CustomRenderer; 2] = [&mut items, &mut preview];
         let translate = |key: &str| runtime.translation(key);
         let rollback = (nodes.len(), *next);
-        let inputs = engine::EngineInputs {
+        let mut paint_frame = PaintFrame {
             layouts: &mut self.layouts,
             font: &self.font,
             metrics,
@@ -225,18 +233,20 @@ impl UiPresentationRuntime {
             content: [width, height],
             translate: &translate,
             language: runtime.text_generation(),
-        };
-        let out = engine::EngineOutput {
+            now: self.menu_seconds,
             nodes: &mut *nodes,
             next: &mut *next,
-            overlay: &overlay,
+            renderers: &mut renderers,
         };
-        let cache = &mut self.form_presentation.container_cache;
+        let cache = &mut self.screens.container_cache;
         let catalog = renderer.catalog();
-        let drawn = renderer.draw(art, inputs, out, |env, root| {
+        // Server ui files always come with a new catalog, which rebuilds the screen's binding.
+        let server_ui = renderer.server_ui;
+        let drawn = renderer.draw(art, &mut paint_frame, |env, root| {
             ScreenCache::render(
                 cache,
                 catalog,
+                server_ui,
                 reference,
                 &context,
                 &data,
@@ -251,7 +261,7 @@ impl UiPresentationRuntime {
         }
         match drawn {
             Ok(Some(frame)) => {
-                self.form_presentation.container = Some((frame, layout));
+                self.projections.container = Some((frame, layout));
                 Ok(true)
             }
             // A screen the engine cannot draw hands containers back to the Java path.
@@ -267,7 +277,7 @@ impl UiPresentationRuntime {
     /// Layouts the current container screen has run, for cache tests.
     #[cfg(test)]
     pub fn engine_container_layouts(&self) -> usize {
-        self.form_presentation
+        self.screens
             .container_cache
             .as_ref()
             .map_or(0, |cache| cache.layouts)
@@ -275,15 +285,12 @@ impl UiPresentationRuntime {
 
     /// The container frame the engine drew last build, if any.
     pub fn engine_container_frame(&self) -> Option<&EngineFrame> {
-        self.form_presentation
-            .container
-            .as_ref()
-            .map(|(frame, _)| frame)
+        self.projections.container.as_ref().map(|(frame, _)| frame)
     }
 
     /// The ledger cell under a container-screen point (virtual px equal GUI px).
     pub fn engine_container_hit(&self, gui: [f32; 2]) -> Option<InventoryCellHit> {
-        let (frame, layout) = self.form_presentation.container.as_ref()?;
+        let (frame, layout) = self.projections.container.as_ref()?;
         let region = hit_test(&frame.hits, [f64::from(gui[0]), f64::from(gui[1])])?;
         let widget = || match *layout {
             ScreenLayout::Station(kind) => {
@@ -325,6 +332,21 @@ impl UiPresentationRuntime {
     }
 }
 
+/// Binds a layout may run to build the grid cells it newly shows.
+const GRID_PASSES: usize = 2;
+
+/// `catalog` in `context`, answering from the screen's kept `resolutions`.
+fn library<'a>(
+    catalog: &'a json_ui::Catalog,
+    context: &'a json_ui::Context,
+    resolutions: &'a json_ui::ResolveCache,
+) -> json_ui::CachedLibrary<'a> {
+    json_ui::CachedLibrary {
+        library: json_ui::CatalogLibrary { catalog, context },
+        cache: resolutions,
+    }
+}
+
 /// The last container screen's resolved tree, its binding and its layout, each
 /// kept while its inputs stay the same: a hover, press or focus change only
 /// filters the laid-out nodes, and a screen sitting open reuses it all.
@@ -332,9 +354,9 @@ pub(super) struct ScreenCache {
     catalog: Arc<json_ui::Catalog>,
     reference: &'static str,
     context: json_ui::Context,
-    resolved: json_ui::ResolvedControl,
+    resolved: Arc<json_ui::ResolvedControl>,
     /// The data `tree` or the layout's `FormRender::bound` was bound against.
-    data: Option<DataSource>,
+    data: Option<Arc<DataSource>>,
     /// The bound tree while no layout holds it, so a relayout never clones it.
     tree: Option<json_ui::ResolvedControl>,
     /// The tree's measurements at the laid root size, reused while scrolling.
@@ -342,6 +364,8 @@ pub(super) struct ScreenCache {
     laid: Option<(ViewState, [f64; 2], Arc<json_ui::FormRender>)>,
     /// The open screen's live bindings across data refreshes.
     binding: json_ui::BindState,
+    /// Grid and factory templates kept across binds, so their unchanged instances stand.
+    resolutions: json_ui::ResolveCache,
     /// Font scale and language tables used by the retained measurements.
     text: (f32, [usize; 3]),
     /// Layouts run for this screen, for cache tests.
@@ -349,6 +373,22 @@ pub(super) struct ScreenCache {
 }
 
 impl ScreenCache {
+    /// The tree the last bind produced, taken back from the layout that holds it. Measurements
+    /// address its controls, so a copy taken from a still-shared layout starts them over.
+    fn bound_tree(&mut self) -> Option<json_ui::ResolvedControl> {
+        if let Some(tree) = self.tree.take() {
+            return Some(tree);
+        }
+        let (_, _, render) = self.laid.take()?;
+        Some(Arc::try_unwrap(render).map_or_else(
+            |shared| {
+                self.measures = json_ui::MeasureCache::default();
+                shared.bound.clone()
+            },
+            |render| render.bound,
+        ))
+    }
+
     /// Releases texture-dependent measurements and layout while retaining the live bound tree.
     pub(super) fn invalidate_textures(&mut self) {
         if let Some((_, _, render)) = self.laid.take()
@@ -366,6 +406,7 @@ impl ScreenCache {
     fn render(
         cache: &mut Option<Self>,
         catalog: &Arc<json_ui::Catalog>,
+        server_ui: bool,
         reference: &'static str,
         context: &json_ui::Context,
         data: &DataSource,
@@ -384,12 +425,13 @@ impl ScreenCache {
                 catalog: Arc::clone(catalog),
                 reference,
                 context: context.clone(),
-                resolved: json_ui::resolve_screen(reference, catalog, context)?,
+                resolved: Arc::new(json_ui::resolve_screen(reference, catalog, context)?),
                 data: None,
                 tree: None,
                 measures: json_ui::MeasureCache::default(),
                 laid: None,
-                binding: json_ui::BindState::new(),
+                binding: super::recipe_book::screen_binding(server_ui),
+                resolutions: json_ui::ResolveCache::default(),
                 text,
                 layouts: 0,
             });
@@ -400,16 +442,33 @@ impl ScreenCache {
             cached.text = text;
             cached.measures = json_ui::MeasureCache::default();
         }
-        if cached.data.as_ref() != Some(data) {
-            cached.tree = Some(json_ui::bind_screen(
-                &cached.resolved,
-                catalog,
-                context,
-                data,
-                &mut cached.binding,
-            ));
-            cached.data = Some(data.clone());
-            cached.measures = json_ui::MeasureCache::default();
+        if cached.data.as_deref() != Some(data) {
+            let data = Arc::new(data.clone());
+            // A refresh rebuilds only the controls it changed and keeps their measurements, so
+            // moving one item or switching a tab no longer rebinds and remeasures the screen.
+            match cached.bound_tree() {
+                Some(mut tree) => {
+                    json_ui::rebind_screen(
+                        &cached.resolved,
+                        &library(&cached.catalog, &cached.context, &cached.resolutions),
+                        &data,
+                        &mut cached.binding,
+                        &mut tree,
+                        &mut cached.measures,
+                    );
+                    cached.tree = Some(tree);
+                }
+                None => {
+                    cached.tree = Some(json_ui::bind_screen_incremental(
+                        &cached.resolved,
+                        &library(&cached.catalog, &cached.context, &cached.resolutions),
+                        &data,
+                        &mut cached.binding,
+                    ));
+                    cached.measures = json_ui::MeasureCache::default();
+                }
+            }
+            cached.data = Some(data);
             cached.laid = None;
         }
         // Hover, press and focus only filter the gated nodes; scroll lays out again.
@@ -424,15 +483,30 @@ impl ScreenCache {
             {
                 cached.measures = json_ui::MeasureCache::default();
             }
-            let tree = match cached.tree.take() {
-                Some(tree) => tree,
-                None => {
-                    let (_, _, render) = cached.laid.take()?;
-                    Arc::try_unwrap(render)
-                        .map_or_else(|shared| shared.bound.clone(), |render| render.bound)
-                }
-            };
-            let render = json_ui::render_bound_gated(tree, root, env, view, &mut cached.measures);
+            let tree = cached.bound_tree()?;
+            let mut render =
+                json_ui::render_bound_gated(tree, root, env, view, &mut cached.measures);
+            // Long grids build only the cells around those in view: bind what this layout
+            // newly shows and lay out again, before anything draws.
+            for _ in 0..GRID_PASSES {
+                let Some(data) = cached
+                    .data
+                    .clone()
+                    .filter(|_| cached.binding.show_grid_cells(&render.report))
+                else {
+                    break;
+                };
+                let mut tree = render.bound;
+                json_ui::rebind_screen(
+                    &cached.resolved,
+                    &library(&cached.catalog, &cached.context, &cached.resolutions),
+                    &data,
+                    &mut cached.binding,
+                    &mut tree,
+                    &mut cached.measures,
+                );
+                render = json_ui::render_bound_gated(tree, root, env, view, &mut cached.measures);
+            }
             // Scroll views publish their end state; views reading it rebind next frame.
             if cached.binding.publish_scrolls(&render.report) && cached.binding.observes_scroll() {
                 cached.data = None;
@@ -574,22 +648,27 @@ fn screen_data(
     let mut data = DataSource::new();
     // Bindings the controller does not answer read as false, as in vanilla.
     data.set_strict(true);
+    // The survival defaults go first, so the recipe book's layout globals override them.
+    survival_globals(&mut data, title);
+    // The recipe book's icons go first: its rows name icons by table index, so behind the
+    // inventory's icons a moved item would shift every row and rebind the whole book.
+    if let ScreenLayout::Personal { book } | ScreenLayout::Workbench { book } = layout {
+        super::recipe_book::book_data(
+            player_runtime,
+            &mut data,
+            runtime,
+            frame,
+            icons,
+            book,
+            book_cache,
+        );
+    }
     let [inventory, hotbar] = player_rows(player_runtime, runtime, frame, icons);
     data.set_collection("inventory_items", inventory);
     data.set_collection("hotbar_items", hotbar);
     let mut cells = Cells { frame, icons };
-    survival_globals(&mut data, title);
     match layout {
-        ScreenLayout::Personal { book } | ScreenLayout::Workbench { book } => {
-            super::recipe_book::book_data(
-                player_runtime,
-                &mut data,
-                runtime,
-                frame,
-                cells.icons,
-                book,
-                book_cache,
-            );
+        ScreenLayout::Personal { .. } | ScreenLayout::Workbench { .. } => {
             let width = if matches!(layout, ScreenLayout::Workbench { .. }) {
                 3
             } else {
@@ -708,6 +787,9 @@ mod tooltip_tests;
 
 #[cfg(test)]
 mod empty_cells_tests;
+
+#[cfg(test)]
+mod book_order_tests;
 
 /// The stack, icon, and durability a station cell shows.
 fn station_cell<'a>(
@@ -872,6 +954,7 @@ mod review_tests {
             let rendered = ScreenCache::render(
                 &mut cache,
                 &catalog,
+                false,
                 "chest.small_chest_screen",
                 &context,
                 &data,

@@ -111,7 +111,7 @@ fn installed_create_world_draws_its_preview_and_native_category_art() {
             &|_| None,
         )
         .unwrap();
-    let originals = runtime.form_presentation.oreui_originals.as_ref().unwrap();
+    let originals = runtime.screens.oreui.originals.as_ref().unwrap();
     for key in [WORLD_PREVIEW].into_iter().chain(WORLD_CATEGORY_ICONS) {
         let sprite = originals.sprites[key];
         assert!(nodes.iter().any(|node| matches!(node.visual(), ui::UiVisual::Sprite {texture_page, uv, ..} if *texture_page == originals.page + sprite.page && *uv == sprite.bounds)), "missing installed world art {key}");
@@ -147,7 +147,7 @@ fn create_world_keeps_sidebar_scroll_independent_and_reveals_keyboard_choices() 
     assert!(rect.min().y() >= 0.0 && rect.max().y() <= 150.0);
     assert!(
         runtime
-            .form_presentation
+            .projections
             .menu_focus
             .contains(&local(A::NameField))
     );
@@ -256,7 +256,8 @@ fn retained_world_form_draws_controls_above_their_panel_backgrounds() {
 
 #[test]
 fn advanced_world_form_exposes_backend_and_generator_separately() {
-    use bridge::{Backend, UnavailableReason};
+    use bridge::Backend;
+    use launcher::local_worlds::world::UnavailableReason;
     let mut view = MenuView::new(true, "Fixture".into());
     view.local.tab = Tab::Advanced;
     view.local.bds_unavailable = Some(UnavailableReason::DockerMissing);

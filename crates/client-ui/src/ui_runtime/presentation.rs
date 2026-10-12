@@ -1,7 +1,6 @@
 use std::{fmt, sync::Arc};
 
 use assets::{RuntimeFontCatalog, RuntimeHudCatalog, RuntimeIconCatalog};
-use bevy::prelude::Resource;
 use render_model::{UiRenderInput, UiRenderTextureArray};
 use sha2::{Digest, Sha256};
 
@@ -12,13 +11,12 @@ use ui::{
 
 use super::scene_stack::Scene;
 use super::{UiRuntime, render_adapter::UiRenderViewport};
-use crate::ui_runtime::{item_facts, render_adapter::adapt_ui_draw_list};
+use crate::ui_runtime::render_adapter::adapt_ui_draw_list;
 
 mod accessors;
 mod construction;
 pub mod debug_overlay;
 pub mod dynamic_textures;
-mod font_fallback;
 pub mod forms;
 mod frame;
 pub mod gui_models;
@@ -65,7 +63,7 @@ use primitives::{bounded_visible_text, rect, resolve_chat_line};
 pub use publish::commit::refresh_hud_frame;
 pub use publish::{
     capture_hud_frame,
-    commit::{PendingUiPublication, PreparedUiPublication, PreviewCapture, render_prepared_ui},
+    commit::{PendingUiPublication, PreviewCapture, render_prepared_ui},
     item_icons::ItemIconFrames,
 };
 use retained_hud::{PresentedScoreboardCache, ScoreboardOwnerNameAuthority};
@@ -98,13 +96,23 @@ impl fmt::Display for UiPresentationError {
 
 impl std::error::Error for UiPresentationError {}
 
-#[derive(Resource)]
+impl From<forms::engine::screen::PaintError> for UiPresentationError {
+    fn from(error: forms::engine::screen::PaintError) -> Self {
+        use forms::engine::screen::PaintError;
+        match error {
+            PaintError::InvalidFontTexture => Self::InvalidFontTexture,
+            PaintError::Geometry(error) => Self::Geometry(error),
+            PaintError::Text(error) => Self::Text(error),
+            PaintError::Tree(error) => Self::Tree(error),
+        }
+    }
+}
+
 pub struct UiPresentationRuntime {
     font: Arc<RuntimeFontCatalog>,
     /// The startup font without the session's glyph sheets.
     base_font: Arc<RuntimeFontCatalog>,
     mod_panel_font: Option<mod_panel_font::InstalledFont>,
-    fallback_font: Option<Arc<RuntimeFontCatalog>>,
     textures: Arc<UiRenderTextureArray>,
     texture_session: Option<u64>,
     blank_dynamic_page: render_model::UiTexturePage,
@@ -144,6 +152,7 @@ pub struct UiPresentationRuntime {
     last_hud_diagnostics: crate::ui_runtime::gameplay_hud::GameplayHudDiagnostics,
     /// This frame's world-space tags, including scores, and their retained glyph atlas.
     nametag_anchors: Vec<nametags::NametagAnchor>,
+    nametag_local_actor: Option<u64>,
     nametag_atlas: nametag_atlas::NametagAtlas,
     primitive_text: primitive_shapes::PrimitiveTextRasterizer,
     /// Stable reserved logical page for the optional preview raster.
@@ -200,7 +209,14 @@ pub struct UiPresentationRuntime {
     /// Full settings slider geometry, including steps clipped from view.
     settings_slider_drag_targets: Vec<(MenuAction, UiRect)>,
     menu_scrolls: menu_scroll::MenuScrolls,
-    form_presentation: forms::FormPresentation,
+    /// The JSON-UI engine: catalogs, layout caches and animation state.
+    engine: Option<Box<forms::engine::FormEngine>>,
+    /// The live catalog's screen settings, published to the runtime.
+    screen_settings: Arc<super::scene_stack::ScreenSettingsTable>,
+    /// Each screen family's own state, carried across builds.
+    screens: forms::ScreenStates,
+    /// What the last build exposes to input; reset as each build starts.
+    projections: forms::FrameProjections,
     /// Window-space rect of the sign editor's Done button in the last build.
     loading_stage: Option<LoadingStage>,
     startup: StartupPresentationState,

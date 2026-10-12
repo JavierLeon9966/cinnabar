@@ -276,7 +276,6 @@ pub(super) fn rebuild(runtime: &mut UiPresentationRuntime) {
             .as_ref()
             .map_or_else(super::mod_panel_font::blank_page, |font| font.page.clone()),
     );
-    dynamic.extend(super::font_fallback::pages(runtime));
     // Unused art pages keep their old pixels; nothing references them.
     let art_pages = previous
         .len()
@@ -331,7 +330,7 @@ fn warn_rebuild_failed(reason: &render_model::UiRenderRejectReason) {
     static FAILURES: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
     let count = FAILURES.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
     if count.is_power_of_two() {
-        bevy::log::warn!(count, ?reason, "dynamic UI texture pages were not replaced");
+        tracing::warn!(count, ?reason, "dynamic UI texture pages were not replaced");
     }
 }
 

@@ -1,3 +1,4 @@
+use client_shell::ui_resources::UiRuntimeResource;
 use client_state::PlayerRuntime;
 use protocol::{
     ActorHandedness, ContainerIdentity, EquipmentEvent, InventoryContentEvent, InventoryEvent,
@@ -11,7 +12,7 @@ use {
 fn assert_cube_scene(app: &bevy::prelude::App, expected: bool) {
     assert_eq!(
         app.world()
-            .resource::<render::ViewmodelScene>()
+            .resource::<render_scene::ViewmodelScene>()
             .is_opaque_cube(),
         expected
     );
@@ -254,7 +255,7 @@ impl Drop for FixturePack {
 /// Compiles a small player rig with an arm and sleeve for hand-publication tests.
 pub(super) fn hand_fixture() -> (
     FixturePack,
-    render::ViewmodelGeometry,
+    render_model::ViewmodelGeometry,
     std::sync::Arc<assets::RuntimeEntityAssets>,
 ) {
     use assets::{RuntimeActorCatalog, RuntimeEntityAssets, encode_entity_blob};
@@ -303,8 +304,8 @@ pub(super) fn hand_fixture() -> (
     let entities = std::sync::Arc::new(RuntimeEntityAssets::decode(&bytes).unwrap());
     let actor = pack_compiler::compile_actor_assets(&pack.0, manifest).unwrap();
     let catalog = RuntimeActorCatalog::decode(&actor.bytes, &entities).unwrap();
-    let artwork = render::ActorArtworkPages::new(&catalog);
-    let geometry = render::ViewmodelGeometry::from_runtime(&entities, &artwork).unwrap();
+    let artwork = render_model::ActorArtworkPages::new(&catalog);
+    let geometry = render_model::ViewmodelGeometry::from_runtime(&entities, &artwork).unwrap();
     (pack, geometry, entities)
 }
 
@@ -415,13 +416,13 @@ fn menu_input_leak_real_producer_to_hand_adapter_keeps_cpu_until_completion_and_
         },
     );
     let mut app = App::new();
-    app.insert_resource(runtime)
+    app.insert_resource(UiRuntimeResource(runtime))
         .insert_resource(player_runtime.clone())
         .insert_resource(world)
-        .insert_resource(geometry)
+        .insert_resource(render_scene::ViewmodelGeometryResource(geometry))
         .init_resource::<HandAdapter>()
-        .init_resource::<render::ViewmodelScene>()
-        .init_resource::<render::ViewmodelCompletionGate>();
+        .init_resource::<render_scene::ViewmodelScene>()
+        .init_resource::<render_scene::ViewmodelCompletionGate>();
     app.world_mut().spawn((
         FlyCamera::default(),
         Camera {
@@ -439,7 +440,7 @@ fn menu_input_leak_real_producer_to_hand_adapter_keeps_cpu_until_completion_and_
     ));
     let observe = |mut hand: ViewmodelPublish,
                    player_runtime: Res<PlayerRuntime>,
-                   runtime: Res<UiRuntime>,
+                   runtime: Res<UiRuntimeResource>,
                    world: Res<ClientWorld>| {
         assert!(!hand.observe(&player_runtime, &runtime, &world, true, false, [640, 480]));
     };
@@ -458,7 +459,7 @@ fn menu_input_leak_real_producer_to_hand_adapter_keeps_cpu_until_completion_and_
     app.world_mut().run_system_once(observe).unwrap();
     assert_eq!(
         app.world().resource::<HandAdapter>().stats.mode,
-        Some(render::ViewmodelMode::EmptyHandNeutralStaticFallback)
+        Some(render_scene::ViewmodelMode::EmptyHandNeutralStaticFallback)
     );
     assert_eq!(
         app.world().resource::<HandAdapter>().stats.skin_validations,
@@ -492,7 +493,7 @@ fn menu_input_leak_real_producer_to_hand_adapter_keeps_cpu_until_completion_and_
         .run_system_once(
             |mut hand: ViewmodelPublish,
              player_runtime: Res<PlayerRuntime>,
-             runtime: Res<UiRuntime>,
+             runtime: Res<UiRuntimeResource>,
              world: Res<ClientWorld>| {
                 assert!(!hand.observe(&player_runtime, &runtime, &world, false, false, [640, 480]));
             },
@@ -506,7 +507,7 @@ fn menu_input_leak_real_producer_to_hand_adapter_keeps_cpu_until_completion_and_
         .run_system_once(
             |mut hand: ViewmodelPublish,
              player_runtime: Res<PlayerRuntime>,
-             runtime: Res<UiRuntime>,
+             runtime: Res<UiRuntimeResource>,
              world: Res<ClientWorld>| {
                 assert!(!hand.observe(&player_runtime, &runtime, &world, true, true, [640, 480]));
             },
@@ -517,7 +518,7 @@ fn menu_input_leak_real_producer_to_hand_adapter_keeps_cpu_until_completion_and_
         .run_system_once(
             |mut hand: ViewmodelPublish,
              player_runtime: Res<PlayerRuntime>,
-             runtime: Res<UiRuntime>,
+             runtime: Res<UiRuntimeResource>,
              world: Res<ClientWorld>| {
                 assert!(!hand.observe(&player_runtime, &runtime, &world, true, false, [800, 480]));
             },
@@ -608,7 +609,7 @@ fn menu_input_leak_real_producer_to_hand_adapter_keeps_cpu_until_completion_and_
     app.world_mut().run_system_once(observe).unwrap();
     assert_eq!(
         app.world().resource::<HandAdapter>().stats.mode,
-        Some(render::ViewmodelMode::EmptyHandNeutralStaticFallback)
+        Some(render_scene::ViewmodelMode::EmptyHandNeutralStaticFallback)
     );
 }
 
@@ -618,7 +619,7 @@ fn ui_only_headless_hand_adapter_keeps_the_cpu_path_without_gpu_resources() {
     use bevy::{ecs::system::RunSystemOnce, prelude::*};
     let (_pack, _geometry, entities) = hand_fixture();
     let mut app = App::new();
-    app.insert_resource(UiRuntime::new(1))
+    app.insert_resource(UiRuntimeResource(UiRuntime::new(1)))
         .insert_resource(PlayerRuntime(player_state::PlayerState::new(1)))
         .insert_resource(ClientWorld::new_with_entity_assets(
             std::sync::Arc::new(assets::RuntimeAssets::diagnostic()),
@@ -628,7 +629,7 @@ fn ui_only_headless_hand_adapter_keeps_the_cpu_path_without_gpu_resources() {
         .run_system_once(
             |mut hand: ViewmodelPublish,
              player_runtime: Res<PlayerRuntime>,
-             runtime: Res<UiRuntime>,
+             runtime: Res<UiRuntimeResource>,
              world: Res<ClientWorld>| {
                 assert!(!hand.observe(&player_runtime, &runtime, &world, true, false, [640, 480]));
                 hand.clear();

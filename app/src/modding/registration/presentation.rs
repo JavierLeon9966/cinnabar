@@ -40,7 +40,7 @@ pub(super) fn refresh_presentation(world: &mut World) {
         return;
     }
     world.resource_scope(|world, mut runtime: Mut<ModRuntime>| {
-        let Some(mut presentation) = world.get_resource_mut::<UiPresentationRuntime>() else {
+        let Some(mut presentation) = world.get_resource_mut::<UiPresentationResource>() else {
             return;
         };
         let owner = runtime.hosts.panel_owner();
@@ -63,6 +63,11 @@ pub(super) fn refresh_presentation(world: &mut World) {
 
 /// Releases extension-owned surfaces and gameplay presentation policies.
 pub(super) fn clear_presentation(world: &mut World) {
+    if let Some(mut style) =
+        world.get_resource_mut::<client_presentation::actor_publication::ActorPresentationStyle>()
+    {
+        *style = Default::default();
+    }
     if let Some(mut physics) =
         world.get_resource_mut::<client_interaction::movement::LocalPhysicsController>()
     {
@@ -71,7 +76,7 @@ pub(super) fn clear_presentation(world: &mut World) {
     if let Some(mut policy) = world.get_resource_mut::<crate::item_use::ModItemUsePolicy>() {
         policy.scope = None;
     }
-    if let Some(mut scene) = world.get_resource_mut::<render::ModRenderScene>() {
+    if let Some(mut scene) = world.get_resource_mut::<render_scene::ModRenderScene>() {
         scene.clear();
     }
     if let Some(mut cues) = world.get_resource_mut::<super::super::ModCueFeed>() {
@@ -84,7 +89,7 @@ pub(super) fn clear_presentation(world: &mut World) {
         camera.set_preserve_teleport_rotation(false);
         camera.set_view_scale(1.0, 1.0);
     }
-    if let Some(mut presentation) = world.get_resource_mut::<UiPresentationRuntime>() {
+    if let Some(mut presentation) = world.get_resource_mut::<UiPresentationResource>() {
         presentation.set_mod_panel_open(false);
         let _ = presentation.set_mod_panel(None);
         let _ = presentation.set_mod_label(None);

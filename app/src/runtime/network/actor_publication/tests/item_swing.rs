@@ -19,6 +19,7 @@ fn select_authored_swing(world: &mut World, ticks: u32) {
             .unwrap()
             .seed_item_registry(protocol::ItemRegistryEvent {
                 entries: [protocol::ItemRegistryEntry {
+                    components: None,
                     identifier: identifier.clone(),
                     network_id,
                     component_based: true,
@@ -50,30 +51,32 @@ fn select_authored_swing(world: &mut World, ticks: u32) {
             icons: None,
         },
     ));
-    world.resource_scope(|world, mut ui: Mut<client_ui::ui_runtime::UiRuntime>| {
-        let mut player = world.resource_mut::<client_state::PlayerRuntime>();
-        player
-            .facts
-            .publish_player_game_mode(protocol::PlayerGameMode::Survival);
-        ui.inventory_ledger_mut(&mut player)
-            .apply(&InventoryEvent::Slot(InventorySlotEvent {
-                identity: SlotIdentity {
-                    container: ContainerIdentity {
-                        window_id: Some(0),
-                        slot_type: None,
-                        dynamic_id: None,
+    world.resource_scope(
+        |world, mut ui: Mut<client_shell::ui_resources::UiRuntimeResource>| {
+            let mut player = world.resource_mut::<client_state::PlayerRuntime>();
+            player
+                .facts
+                .publish_player_game_mode(protocol::PlayerGameMode::Survival);
+            ui.inventory_ledger_mut(&mut player)
+                .apply(&InventoryEvent::Slot(InventorySlotEvent {
+                    identity: SlotIdentity {
+                        container: ContainerIdentity {
+                            window_id: Some(0),
+                            slot_type: None,
+                            dynamic_id: None,
+                        },
+                        slot: 0,
                     },
-                    slot: 0,
-                },
-                stack: protocol::NetworkItemStack {
-                    network_id,
-                    count: 1,
-                    stack_network_id: 5,
-                    ..protocol::NetworkItemStack::empty()
-                },
-                storage_item: None,
-            }));
-    });
+                    stack: protocol::NetworkItemStack {
+                        network_id,
+                        count: 1,
+                        stack_network_id: 5,
+                        ..protocol::NetworkItemStack::empty()
+                    },
+                    storage_item: None,
+                }));
+        },
+    );
 }
 
 #[test]
@@ -136,7 +139,7 @@ fn final_publication_preserves_authored_swing_ticks_without_attack_input() {
         );
         assert_eq!(
             rig.java.swing,
-            counters.map(|counter| counter / client_world::ACTOR_SWING_TICKS as f32),
+            counters.map(|counter| counter / actor_animation::ACTOR_SWING_TICKS as f32),
             "the independent Java denominator remains effect-based"
         );
     }

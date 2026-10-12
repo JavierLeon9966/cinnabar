@@ -1,4 +1,5 @@
 use super::*;
+use client_ui::ui_runtime::presentation::UiPresentationRuntime;
 
 struct Scratch(PathBuf);
 
@@ -152,9 +153,9 @@ fn world() -> (World, Receiver<Message>, Receiver<ModHost>) {
         fallback_retired: Mutex::new(Vec::with_capacity(2)),
         settings: Arc::new(Mutex::new(None)),
     });
-    world.insert_resource(
+    world.insert_resource(UiPresentationResource(
         UiPresentationRuntime::new(client_ui::test_support::fixture_font()).unwrap(),
-    );
+    ));
     (world, receive_messages, receive_retired)
 }
 
@@ -298,7 +299,7 @@ fn id_only_reattachment_preserves_guest_state_panel_input_and_interaction() {
         .host
         .set_panel_open(true);
     world
-        .resource_mut::<UiPresentationRuntime>()
+        .resource_mut::<UiPresentationResource>()
         .set_mod_panel_open(true);
     world.resource_mut::<ModInteraction>().attack_reach = Some(5.0);
     let identity = world
@@ -323,7 +324,7 @@ fn id_only_reattachment_preserves_guest_state_panel_input_and_interaction() {
         &runtime.hosts.host.panel().unwrap().controls[0],
         ui::mod_panel::Control::Toggle { value: true, .. }
     ));
-    assert!(world.resource::<UiPresentationRuntime>().mod_panel_open());
+    assert!(world.resource::<UiPresentationResource>().mod_panel_open());
     assert_eq!(world.resource::<ModInteraction>().attack_reach, Some(5.0));
     let Message::Acknowledge { status, .. } = messages.try_recv().unwrap() else {
         panic!("expected reuse acknowledgment")
@@ -456,9 +457,9 @@ fn disable_and_invalid_registration_revoke_all_owned_outputs() {
         world.resource_mut::<ModInteraction>().attack_reach = Some(6.0);
         world.resource_mut::<VisualTimeOverride>().0 = Some(18_000);
         world
-            .resource_mut::<UiPresentationRuntime>()
+            .resource_mut::<UiPresentationResource>()
             .set_mod_panel_open(true);
-        let mut scene = render::ModRenderScene::default();
+        let mut scene = render_scene::ModRenderScene::default();
         scene.apply(&rendered_output(), 7);
         world.insert_resource(scene);
         world.insert_resource(super::super::ModCueFeed(vec![mod_host::ModCue {
@@ -473,12 +474,17 @@ fn disable_and_invalid_registration_revoke_all_owned_outputs() {
                 result,
             },
         );
-        assert_eq!(world.resource::<render::ModRenderScene>().vertex_count(), 0);
+        assert_eq!(
+            world
+                .resource::<render_scene::ModRenderScene>()
+                .vertex_count(),
+            0
+        );
         assert!(world.resource::<super::super::ModCueFeed>().0.is_empty());
         assert!(!world.contains_resource::<ModRuntime>());
         assert!(!world.contains_resource::<ModInteraction>());
         assert!(!world.contains_resource::<VisualTimeOverride>());
-        assert!(!world.resource::<UiPresentationRuntime>().mod_panel_open());
+        assert!(!world.resource::<UiPresentationResource>().mod_panel_open());
         assert_eq!(retired.try_recv().unwrap().label(), Some("Hello"));
     }
 }
@@ -569,7 +575,7 @@ fn saturated_retirement_queue_releases_authority_before_waiting_for_disposal() {
         .host
         .set_panel_open(true);
     world
-        .resource_mut::<UiPresentationRuntime>()
+        .resource_mut::<UiPresentationResource>()
         .set_mod_panel_open(true);
     world.resource_mut::<ModInteraction>().attack_reach = Some(6.0);
     world.resource_mut::<VisualTimeOverride>().0 = Some(18_000);
@@ -600,7 +606,7 @@ fn saturated_retirement_queue_releases_authority_before_waiting_for_disposal() {
     assert!(runtime.suspended);
     assert!(!runtime.hosts.host.panel_open());
     assert!(!runtime.controls.focused);
-    assert!(!world.resource::<UiPresentationRuntime>().mod_panel_open());
+    assert!(!world.resource::<UiPresentationResource>().mod_panel_open());
     assert_eq!(world.resource::<ModInteraction>().attack_reach, None);
     assert_eq!(world.resource::<VisualTimeOverride>().0, None);
     let Message::Acknowledge { status, .. } = messages.try_recv().unwrap() else {
@@ -900,7 +906,10 @@ fn panel_key_capture_keeps_other_components_toggle_keys_for_rebinding() {
 }
 
 /// Publishes the retained render scene through the app's component-merging boundary.
-fn publish_render_scene(scene: ResMut<render::ModRenderScene>, mut runtime: ResMut<ModRuntime>) {
+fn publish_render_scene(
+    scene: ResMut<render_scene::ModRenderScene>,
+    mut runtime: ResMut<ModRuntime>,
+) {
     super::super::render::publish(Some(scene), &mut runtime);
 }
 
@@ -921,7 +930,7 @@ fn removing_a_companion_republishes_even_when_scene_and_primary_generations_matc
         },
     );
     let generation = world.resource::<ModRuntime>().hosts.host.render().1;
-    let mut scene = render::ModRenderScene::default();
+    let mut scene = render_scene::ModRenderScene::default();
     // Merged scene generations and source generations have independent counters.
     scene.apply(&rendered_output(), generation);
     assert!(scene.vertex_count() > 0);
@@ -935,7 +944,7 @@ fn removing_a_companion_republishes_even_when_scene_and_primary_generations_matc
         },
     );
     world.run_system_once(publish_render_scene).unwrap();
-    let scene = world.resource::<render::ModRenderScene>();
+    let scene = world.resource::<render_scene::ModRenderScene>();
     assert_eq!(scene.vertex_count(), 0);
     assert_ne!(scene.generation(), generation);
 }
@@ -956,7 +965,7 @@ fn replacing_a_registered_companion_refreshes_the_retained_render_scene() {
             result: Ok(Action::Replace(candidate(&companion, false, "First"))),
         },
     );
-    let mut scene = render::ModRenderScene::default();
+    let mut scene = render_scene::ModRenderScene::default();
     scene.apply(&rendered_output(), 1);
     world.insert_resource(scene);
     install(
@@ -969,7 +978,12 @@ fn replacing_a_registered_companion_refreshes_the_retained_render_scene() {
     );
     assert_eq!(retired.try_recv().unwrap().label(), Some("First"));
     world.run_system_once(publish_render_scene).unwrap();
-    assert_eq!(world.resource::<render::ModRenderScene>().vertex_count(), 0);
+    assert_eq!(
+        world
+            .resource::<render_scene::ModRenderScene>()
+            .vertex_count(),
+        0
+    );
     assert!(world.resource::<ModRuntime>().hosts.host(0).is_active());
 }
 
@@ -983,4 +997,23 @@ fn status_advertises_independent_registration_for_every_result() {
         assert_eq!(json["state"], state);
         assert_eq!(json["request_id"], "capability-check");
     }
+}
+
+#[test]
+fn unloading_last_extension_clears_actor_cosmetics_without_removing_owner() {
+    let (mut world, _, _) = world();
+    world.insert_resource(
+        client_presentation::actor_publication::ActorPresentationStyle {
+            hurt_color: Some([1., 0., 0., 1.]),
+            hurt_armor_color: Some([0., 1., 0., 1.]),
+            attackable_actor: Some(42),
+            attackable_color: Some([0., 0., 1., 1.]),
+        },
+    );
+    clear_owned_state(&mut world);
+    let style = world.resource::<client_presentation::actor_publication::ActorPresentationStyle>();
+    assert!(style.hurt_color.is_none());
+    assert!(style.hurt_armor_color.is_none());
+    assert!(style.attackable_color.is_none());
+    assert!(style.attackable_actor.is_none());
 }

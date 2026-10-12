@@ -23,6 +23,7 @@ pub mod inventory_actions;
 pub mod inventory_drag;
 pub mod inventory_ingress;
 
+mod food;
 mod item_activation;
 pub mod item_facts;
 pub mod json_ui_assets;
@@ -52,14 +53,10 @@ pub use interaction::FastTransferAction;
 pub use interaction::dispatch_inventory_click;
 pub use interaction::{ChatFlushError, flush_chat_sends, flush_inventory_send};
 #[cfg(test)]
-use interaction::{
-    dispatch_chat_ui_action, gamepad_chat_action, paste_chat_shortcut,
-    restore_gameplay_input_after_chat, suppress_gameplay_input_for_chat,
-};
+use interaction::{dispatch_chat_ui_action, paste_chat_shortcut};
 
 use std::{collections::VecDeque, sync::Arc};
 
-use bevy::prelude::Resource;
 use protocol::{
     ActorAttribute, BlockCrackEvent, ChatAutocompleteCatalog, EquipmentEvent, InventoryAuthority,
     UiEvent,
@@ -138,10 +135,11 @@ impl UiAuthorityTransition {
     }
 }
 
-#[derive(Clone, Debug, Resource)]
+#[derive(Clone, Debug)]
 pub struct UiRuntime {
     pub experiences: crate::experience_session::ExperienceSession,
     session_id: u64,
+    item_fuel_catalog: Option<Arc<assets::RuntimeEntityAssets>>,
     last_fifo_sequence: Option<u64>,
     last_block_crack_sequence: Option<u64>,
     last_local_millis: Option<u64>,
@@ -209,6 +207,8 @@ pub struct UiRuntime {
     server_lang: Option<Arc<assets::ServerLangOverlay>>,
     session_icons: Option<Arc<presentation::SessionIcons>>,
     session_items: Option<Arc<item_facts::SessionItemComponents>>,
+    /// Version-pinned local item facts survive replacement of server session state.
+    food_catalog: Option<Arc<assets::RuntimeEquipmentCatalog>>,
     stack_facts: protocol::ItemStackFactsCache,
     /// Invalidates names when components or any translation table changes.
     item_name_generation: u64,
@@ -230,6 +230,7 @@ pub struct UiRuntime {
 impl UiRuntime {
     pub fn new(session_id: u64) -> Self {
         Self {
+            item_fuel_catalog: None,
             session_id,
             experiences: Default::default(),
             last_fifo_sequence: None,
@@ -304,6 +305,7 @@ impl UiRuntime {
             server_lang: None,
             session_icons: None,
             session_items: None,
+            food_catalog: None,
             stack_facts: Default::default(),
             item_name_generation: 0,
             server_ui: None,
@@ -447,11 +449,20 @@ impl UiRuntime {
         self.block_cracks.synchronize_dimension(Some(dimension));
     }
 
+    /// Installs validated compiled fuel facts for subsequent inventory admission.
+    pub fn set_item_fuel_catalog(&mut self, catalog: Arc<assets::RuntimeEntityAssets>) {
+        self.item_fuel_catalog = Some(catalog);
+    }
+
     pub fn inventory_ledger_mut<'a>(
         &mut self,
         player_runtime: &'a mut player_state::PlayerState,
     ) -> &'a mut PlayerInventoryLedger {
-        player_runtime.inventory.ledger_mut()
+        let ledger = player_runtime.inventory.ledger_mut();
+        if let Some(catalog) = &self.item_fuel_catalog {
+            ledger.set_item_fuel_catalog(Arc::clone(catalog));
+        }
+        ledger
     }
 
     pub fn poll_inventory_timeout(

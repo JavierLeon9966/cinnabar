@@ -1,4 +1,5 @@
 use crate::runtime::network::resource_packs::PackApplication;
+use bevy::prelude::IntoScheduleConfigs;
 use client_runtime::network::NetworkHandle;
 use std::path::PathBuf;
 
@@ -6,8 +7,8 @@ use std::path::PathBuf;
 use bevy::prelude::{Entity, Mut, default};
 use bevy::{
     prelude::{
-        App, ButtonInput, IntoScheduleConfigs, KeyCode, MessageReader, MouseButton, NonSendMut,
-        Query, Real, Res, ResMut, Resource, Time, Update, Window, With,
+        App, ButtonInput, KeyCode, MessageReader, MouseButton, NonSendMut, Query, Real, Res,
+        ResMut, Resource, Time, Update, Window, With,
     },
     window::PrimaryWindow,
 };
@@ -17,6 +18,8 @@ use server_experience::{
 };
 
 use client_extensions::server_experiences::consent::{can_disable, chrome};
+use client_shell::ui_resources::{UiPresentationResource, UiRuntimeResource};
+#[cfg(test)]
 use client_ui::ui_runtime::{UiRuntime, presentation::UiPresentationRuntime};
 use {client_shell::menu::MenuRuntime, client_state::ClientFrameSet};
 
@@ -62,8 +65,8 @@ pub(crate) fn configure(app: &mut App) {
 #[allow(clippy::too_many_arguments, reason = "Bevy system parameters")]
 fn drive(
     mut service: ResMut<ExperienceService>,
-    mut runtime: ResMut<UiRuntime>,
-    mut presentation: ResMut<UiPresentationRuntime>,
+    mut runtime: ResMut<UiRuntimeResource>,
+    mut presentation: ResMut<UiPresentationResource>,
     network: Res<NetworkHandle<PackApplication>>,
     world: Res<crate::runtime::world::ClientWorld>,
     windows: Query<&Window, With<PrimaryWindow>>,
@@ -215,7 +218,7 @@ fn drive(
             .filter(|input| input.state.is_pressed())
             .filter_map(|input| {
                 client_ui::ui_runtime::forms::engine_input::typed_text(
-                    input.key_code,
+                    client_shell::physical_input::keyboard_key(input.key_code),
                     input.text.as_deref(),
                     control,
                 )
@@ -332,7 +335,7 @@ fn drive(
 fn present_media(
     mut service: ResMut<ExperienceService>,
     time: Res<Time<Real>>,
-    scene: Option<ResMut<render::MediaScreenScene>>,
+    scene: Option<ResMut<render_scene::MediaScreenScene>>,
     device: Option<NonSendMut<client_audio::named_audio::AudioDevice>>,
     audio_settings: Option<Res<client_audio::audio::settings::AudioSettings>>,
 ) {

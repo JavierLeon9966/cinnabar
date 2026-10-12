@@ -91,7 +91,7 @@ fn targeted_game_mode_updates_reach_live_hud_and_input_authority_after_fifo_comm
         .submit(3, targeted(1, GameModeUpdate::Unknown(77)))
         .unwrap();
     app.update();
-    let runtime = app.world().resource::<UiRuntime>();
+    let runtime = app.world().resource::<UiRuntimeResource>();
     assert_eq!(
         app.world()
             .resource::<PlayerRuntime>()
@@ -170,7 +170,7 @@ fn bind_ability_fixture(app: &mut App) {
 
 fn prepare_ability_control_fixture(app: &mut App) {
     app.init_resource::<client_runtime::publication::PublicationController>()
-        .init_resource::<render::ChunkUploadAcknowledgements>()
+        .init_resource::<render_scene::ChunkUploadAcknowledgements>()
         .init_resource::<client_presentation::local_player::LocalAvatarPresentation>()
         .init_resource::<client_interaction::movement::PhysicsAuthorityGate>()
         .insert_resource(crate::runtime::visibility::AppMetrics(
@@ -235,7 +235,7 @@ fn actual_schedule_commits_ability_fifo_once_without_changing_input_or_forms() {
     );
     assert!(
         app.world()
-            .resource::<UiRuntime>()
+            .resource::<UiRuntimeResource>()
             .server_forms()
             .active()
             .is_none()

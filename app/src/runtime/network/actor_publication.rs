@@ -1,6 +1,8 @@
 //! Captures post-send observations and finalizes poses after local interaction admission.
 #[cfg(test)]
-use bevy::prelude::{App, IntoScheduleConfigs, Mut, Resource, Update};
+use bevy::prelude::IntoScheduleConfigs;
+#[cfg(test)]
+use bevy::prelude::{App, Mut, Resource, Update};
 use bevy::time::Real;
 use bevy::{
     ecs::system::SystemParam,
@@ -8,7 +10,7 @@ use bevy::{
 };
 use client_presentation::actor_publication::ActorFramePartialTick;
 use client_presentation::actor_publication::{ActorFrameInput, ActorWorld};
-use client_ui::ui_runtime::{UiRuntime, presentation::UiPresentationRuntime};
+use client_shell::ui_resources::{UiPresentationResource, UiRuntimeResource};
 use {
     crate::runtime::world::ClientWorld,
     client_interaction::movement::{
@@ -20,7 +22,7 @@ use {
 /// Projects local damage only after actor ticking, clearing it when the session leaves gameplay.
 pub(crate) fn publish_local_actor_damage(
     world: Res<ClientWorld>,
-    mut ui: Option<ResMut<UiRuntime>>,
+    mut ui: Option<ResMut<UiRuntimeResource>>,
 ) {
     let Some(ui) = ui.as_deref_mut() else {
         return;
@@ -43,15 +45,15 @@ pub(crate) struct ActorObservations<'w> {
     skin: Res<'w, client_shell::player_skin::LocalPlayerSkin>,
     settings: Res<'w, client_presentation::camera::CameraSettingsAuthority>,
     effects: Option<Res<'w, client_interaction::movement::LocalMovementEffectTimeline>>,
-    ui: Option<Res<'w, UiRuntime>>,
+    ui: Option<Res<'w, UiRuntimeResource>>,
     menu: Option<Res<'w, client_shell::menu::MenuRuntime>>,
-    ui_presentation: Option<Res<'w, UiPresentationRuntime>>,
+    ui_presentation: Option<Res<'w, UiPresentationResource>>,
     collisions: Option<Res<'w, PhysicsCollisionRegistries>>,
     item_use: Option<Res<'w, client_interaction::item_use::ItemUseRuntime>>,
     input: Option<Res<'w, client_state::SemanticInputSnapshot>>,
     movement: Option<Res<'w, MovementTicker>>,
     time: Res<'w, Time<Real>>,
-    profiler: Option<Res<'w, render::RuntimeStageProfiler>>,
+    profiler: Option<Res<'w, render_scene::RuntimeStageProfiler>>,
 }
 
 /// Predicts remote actors at this frame's tick positions before interaction picks them.
@@ -93,13 +95,13 @@ pub(crate) fn advance_actor_frame(
     } = observations;
     let _timer = profiler
         .as_deref()
-        .map(|profiler| profiler.time(render::RuntimeStage::ActorPublication));
+        .map(|profiler| profiler.time(render_scene::RuntimeStage::ActorPublication));
     let stream = world.stream.as_ref();
     let local_equipment = stream.map_or_else(Default::default, |stream| {
         client_presentation::presentation::equipment::local_input(
             &player,
             stream,
-            ui.as_deref(),
+            ui.as_deref().map(|ui| &ui.0),
             stream.local_player_runtime_id(),
         )
     });
@@ -142,12 +144,14 @@ pub(crate) fn advance_actor_frame(
         renders_game: {
             let _ui = profiler
                 .as_deref()
-                .map(|profiler| profiler.time(render::RuntimeStage::UiPreparation));
+                .map(|profiler| profiler.time(render_scene::RuntimeStage::UiPreparation));
             client_shell::screen_policy::renders_game(
                 &player,
-                ui.as_deref(),
+                ui.as_deref().map(|ui| &ui.0),
                 menu.as_deref(),
-                ui_presentation.as_deref(),
+                ui_presentation
+                    .as_deref()
+                    .map(|presentation| &presentation.0),
             )
         },
         custom_emote: ui
@@ -235,6 +239,7 @@ pub(crate) struct ActorFinalObservations<'w> {
     movement: Option<Res<'w, MovementTicker>>,
     collisions: Option<Res<'w, PhysicsCollisionRegistries>>,
     cave: Option<Res<'w, crate::runtime::visibility::CaveVisibilityCache>>,
+    icons: Option<Res<'w, UiPresentationResource>>,
 }
 
 /// Consumes admitted local ticks and builds their final poses with the pre-send capture.
@@ -251,6 +256,7 @@ pub(crate) fn prepare_actor_render_frame(
         movement,
         collisions,
         cave,
+        icons,
     } = observations;
     let item_swing_ticks = player
         .as_deref()
@@ -285,7 +291,7 @@ pub(crate) fn prepare_actor_render_frame(
             .filter_map(|(tick, mut progress)| {
                 let sample = physics.sample_at(tick)?;
                 progress.frame_alpha = Some(alpha);
-                Some(client_world::LocalSwingMotionSample {
+                Some(actor_animation::LocalSwingMotionSample {
                     tick,
                     delta: sample.movement,
                     yaw: sample.yaw,
@@ -328,6 +334,7 @@ pub(crate) fn prepare_actor_render_frame(
                 )
             })
         },
+        icons.as_deref().map(|icons| &icons.0),
         params,
     );
 }
@@ -340,10 +347,10 @@ pub(crate) fn publish_entity_shadows(
     partial_tick: Res<ActorFramePartialTick>,
     local: Res<client_presentation::local_player::LocalAvatarVisibilityCarrier>,
     camera: Query<(&Transform, &Projection), With<client_presentation::camera::FlyCamera>>,
-    frame: Res<render::ActorRenderFrame>,
+    frame: Res<render_scene::ActorRenderFrame>,
     drawn: Local<Vec<u64>>,
     staging: Local<Vec<render_model::EntityShadow>>,
-    scene: Option<ResMut<render::EntityShadowScene>>,
+    scene: Option<ResMut<render_scene::EntityShadowScene>>,
 ) {
     client_presentation::entity_shadows::drive_entity_shadows(
         world.stream.as_ref(),

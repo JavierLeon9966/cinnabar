@@ -131,7 +131,7 @@ impl UiPresentationRuntime {
                 None => "-".to_owned(),
             })
             .collect::<Vec<_>>();
-        bevy::log::info!(slots = ?shown, "hotbar changed");
+        tracing::info!(slots = ?shown, "hotbar changed");
         self.logged_hotbar = slots;
     }
 
@@ -157,7 +157,9 @@ impl UiPresentationRuntime {
         } else {
             "not in the vanilla icon catalog"
         };
-        bevy::log::info!(
+        // Debug level: opening the creative search can miss hundreds at once, and every line
+        // costs a synchronous console write in browsers.
+        tracing::debug!(
             identifier,
             metadata,
             custom = !identifier.starts_with("minecraft:"),

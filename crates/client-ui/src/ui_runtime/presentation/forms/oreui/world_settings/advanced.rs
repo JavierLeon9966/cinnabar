@@ -1,7 +1,8 @@
 //! Backend and terrain remain independent choices on the advanced world form.
 
-use bridge::{Backend, UnavailableReason};
+use bridge::Backend;
 use launcher::local_worlds::backend_label;
+use launcher::local_worlds::world::UnavailableReason;
 use {
     super::*,
     launcher::local_worlds::{WorldsView, world_type_label},
@@ -13,7 +14,7 @@ pub(super) fn draw(
     view: &MenuView,
     local_view: &WorldsView,
     area: Bounds,
-) -> Result<f32, UiPresentationError> {
+) -> Result<f32, PaintError> {
     let form = &local_view.create;
     let y = sections::row(canvas, area, area[1], |canvas, area| {
         let y = label(canvas, "World seed", area, area[1])?;
