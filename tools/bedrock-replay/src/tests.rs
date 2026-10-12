@@ -81,6 +81,30 @@ fn options_reject_invalid_runs_and_keep_go_flag_forms() {
     assert!(Options::parse(["-h".into()]).unwrap().is_none());
 }
 
+/// Content keys pair positionally with packs; a dangling key is rejected.
+#[test]
+fn content_keys_pair_positionally_with_packs() {
+    let packs = ["-resource-pack", "a.mcpack", "-resource-pack", "b.mcpack"].map(str::to_owned);
+    let opts = Options::parse(
+        arguments()
+            .into_iter()
+            .chain(packs)
+            .chain(["-content-key".into(), "first".into()]),
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(opts.packs.len(), 2);
+    assert_eq!(opts.pack_keys, ["first"]);
+    assert!(
+        Options::parse(
+            arguments()
+                .into_iter()
+                .chain(["-content-key".into(), "dangling".into()])
+        )
+        .is_err()
+    );
+}
+
 #[test]
 fn capture_preserves_opaque_bodies_and_post_login_metadata() {
     let data: Vec<_> = [

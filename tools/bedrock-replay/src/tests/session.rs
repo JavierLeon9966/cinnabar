@@ -224,7 +224,7 @@ fn nested_pack_keeps_input_hash_and_delivers_the_inner_archive() {
     let path = dir.path().join("nested.zip");
     let bytes = fixtures::pack(true);
     std::fs::write(&path, &bytes).unwrap();
-    let pack = crate::packs::read_pack(&path).unwrap();
+    let pack = crate::packs::read_pack(&path, "").unwrap();
     assert_eq!(pack.archive.as_ref(), fixtures::pack(false));
     assert_eq!(pack.metadata.version, "1.0.0");
     assert_eq!(pack.summary.sha256, format!("{:x}", Sha256::digest(bytes)));
