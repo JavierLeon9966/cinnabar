@@ -702,12 +702,7 @@ const FACE_NORMALS: [[i32; 3]; 6] = [
 
 /// One right-handed quarter turn about `axis`; +90 degrees about Y turns north to west.
 fn rotate_quarter<T: Copy + std::ops::Neg<Output = T>>(value: [T; 3], axis: usize) -> [T; 3] {
-    let [x, y, z] = value;
-    match axis {
-        0 => [x, -z, y],
-        1 => [z, y, -x],
-        _ => [-y, x, z],
-    }
+    block_transform::rotation::rotate_quarter(value, axis)
 }
 
 /// Applies the block transformation about the block centre and converts to

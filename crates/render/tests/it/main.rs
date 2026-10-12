@@ -31,6 +31,7 @@ mod bamboo_texture_filtering;
 mod biome_shader;
 mod biome_tint_bounds;
 mod block_selection;
+mod face_attachment;
 mod block_selection_native;
 mod block_selection_snapshot;
 mod camera_fire;
