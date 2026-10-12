@@ -1,10 +1,10 @@
 #[cfg(not(feature = "acceptance"))]
 use crate::acceptance::AcceptanceRun;
-use crate::runtime::network::resource_packs::PackApplication;
 #[cfg(feature = "acceptance")]
-use crate::runtime::phase3_evidence::{
-    Phase3EvidenceEmitter, Phase3EvidenceIdentitySource, emit_phase3_evidence,
+use crate::runtime::movement_evidence::{
+    MovementEvidenceEmitter, MovementEvidenceIdentitySource, emit_movement_evidence,
 };
+use crate::runtime::network::resource_packs::PackApplication;
 #[cfg(feature = "acceptance")]
 use crate::runtime::shutdown::finish_acceptance_run;
 #[cfg(feature = "acceptance")]
@@ -53,7 +53,8 @@ use client_presentation::{
     camera::FlyCameraUpdateSet,
     local_player::{LocalPlayerFrameSet, publish_interaction_origin},
 };
-use client_ui::ui_runtime::{UiRuntime, oreui_fonts, presentation::UiPresentationRuntime};
+use client_shell::ui_resources::{UiPresentationResource, UiRuntimeResource};
+use client_ui::ui_runtime::{UiRuntime, presentation::UiPresentationRuntime};
 use diagnostics::markers::SHUTDOWN_COMPLETED;
 use diagnostics::metrics::MetricsCollector;
 use launcher::install_layout::InstallLayout;
@@ -175,7 +176,7 @@ pub(crate) fn configure_client_production_frame_systems(app: &mut App) {
     #[cfg(not(feature = "acceptance"))]
     app.init_resource::<AcceptanceRun>();
     #[cfg(feature = "acceptance")]
-    app.init_resource::<Phase3EvidenceEmitter>();
+    app.init_resource::<MovementEvidenceEmitter>();
     app.init_resource::<crate::runtime::network::PackReload>();
     configure_client_authority_systems(app);
     configure_actor_render_systems(app);
@@ -282,7 +283,7 @@ pub(crate) fn configure_client_production_frame_systems(app: &mut App) {
             (
                 flush_inventory_network,
                 #[cfg(feature = "acceptance")]
-                emit_phase3_evidence,
+                emit_movement_evidence,
                 #[cfg(not(feature = "acceptance"))]
                 crate::runtime::telemetry::discard_completed_movement_evidence,
                 produce_melee,
@@ -521,7 +522,7 @@ pub fn run(args: args::ClientArgs) -> Result<()> {
     let font_runtime = loaded_assets.fonts.into_runtime();
     let block_entity_font = Arc::clone(&font_runtime);
     let font_dir = loaded_assets.selected_path.parent();
-    let font_runtime = oreui_fonts::install(font_runtime, font_dir.unwrap_or(Path::new(".")));
+    let font_runtime = oreui::fonts::install(font_runtime, font_dir.unwrap_or(Path::new(".")));
     let mut ui_presentation = UiPresentationRuntime::with_hud_and_icons(
         font_runtime,
         hud_assets.into_runtime(),
@@ -529,9 +530,10 @@ pub fn run(args: args::ClientArgs) -> Result<()> {
     )
     .context("prepare bounded font, HUD, and item-icon texture arrays for UI rendering")?;
     // The gameplay HUD draws through the JSON-UI engine, so its carrier is required.
-    let ui_assets = carriers.ui?;
-    ui_presentation
-        .enable_json_ui(ui_assets)
+    let json_ui = carriers.ui?;
+    json_ui
+        .join()
+        .and_then(|prepared| ui_presentation.enable_prepared_json_ui(prepared))
         .map_err(|reason| anyhow::anyhow!("JSON-UI engine failed to start: {reason}"))?;
     let ui_catalog = crate::runtime::network::PackUiCatalog(
         ui_presentation
@@ -539,9 +541,13 @@ pub fn run(args: args::ClientArgs) -> Result<()> {
             .context("JSON-UI engine is missing its carrier catalog")?,
     );
     ui_presentation.set_form_texture_fallbacks(&entity_runtime, layout.vanilla_pack_dir());
-    // Installed OreUI artwork is discovered and decoded once for every native screen.
-    if let Some(images) = client_ui::ui_runtime::oreui_assets::load_optional_oreui_images()
-        && let Err(reason) = ui_presentation.enable_oreui_originals(images)
+    // OreUI artwork is decoded once for every native screen.
+    if let Some(images) = oreui::images::load_optional_oreui_images(
+        loaded_assets
+            .selected_path
+            .parent()
+            .unwrap_or(Path::new(".")),
+    ) && let Err(reason) = ui_presentation.enable_oreui_originals(images)
     {
         diagnostics::log_stderr!("OreUI originals disabled ({reason})");
     }
@@ -571,6 +577,10 @@ pub fn run(args: args::ClientArgs) -> Result<()> {
     .map_err(|error| {
         anyhow::anyhow!("prepare validated runtime entity geometry for actor rendering: {error:?}")
     })?;
+    crate::runtime::network::block_entity_art::install_base(
+        carriers.block_entities.clone(),
+        &block_entity_scene,
+    );
     crate::runtime::network::set_base_actor_artwork(actor_artwork.clone(), entity_runtime.clone());
     actor_render_scene.configure_artwork(actor_artwork.clone());
     // A dedicated single-instance builder for the local player's first-person rig, sharing the
@@ -585,17 +595,17 @@ pub fn run(args: args::ClientArgs) -> Result<()> {
         collision_registries.available_record_count()
     );
     #[cfg(feature = "acceptance")]
-    let phase3_identity_source = args
-        .phase3_evidence_target
+    let movement_identity_source = args
+        .movement_evidence_target
         .map(|target| {
-            Phase3EvidenceIdentitySource::from_build(
+            MovementEvidenceIdentitySource::from_build(
                 target,
-                args.phase3_candidate_physics,
+                args.movement_candidate_physics,
                 &collision_registries,
             )
         })
         .transpose()
-        .context("bind Phase 3 evidence to this exact build and collision registry")?;
+        .context("bind movement evidence to this exact build and collision registry")?;
 
     let client_random_id = connection_requested
         .then(|| launcher_host::client_random_id::load(&layout.user_data_root))
@@ -642,7 +652,7 @@ pub fn run(args: args::ClientArgs) -> Result<()> {
     crate::runtime::network::await_overlay_texture_device();
     let network = if connection_requested {
         match spawn_network(NetworkConfig {
-            session_generation: 1,
+            session_generation: simulation_clock::identity::SessionGeneration::new(1),
             socket_dir,
             display_name: args.display_name.clone(),
             client_random_id: client_random_id.expect("connection requested"),
@@ -668,7 +678,7 @@ pub fn run(args: args::ClientArgs) -> Result<()> {
     );
     let diagnostics_enabled = args.acceptance_seconds.is_some() || args.metrics_out.is_some();
     let stage_profile_enabled =
-        std::env::var_os(diagnostics::markers::STAGE_PROFILE).as_deref() == Some(OsStr::new("1"));
+        env_compat::var_os(diagnostics::markers::STAGE_PROFILE).as_deref() == Some(OsStr::new("1"));
     #[cfg(feature = "developer-control")]
     let hidden_surface = crate::developer_control::hidden_window_requested();
     #[cfg(not(feature = "developer-control"))]
@@ -764,7 +774,7 @@ pub fn run(args: args::ClientArgs) -> Result<()> {
         Arc::clone(&runtime_assets),
         Arc::clone(&entity_runtime),
     ))
-    .insert_resource({
+    .insert_resource(UiRuntimeResource({
         let mut ui_runtime = UiRuntime::new(0);
         ui_runtime.set_item_fuel_catalog(Arc::clone(&entity_runtime));
         ui_runtime.set_food_catalog(food_catalog);
@@ -774,11 +784,11 @@ pub fn run(args: args::ClientArgs) -> Result<()> {
         ui_runtime.set_lang_catalog(lang_assets.into_runtime());
         ui_runtime.set_active_language(active_lang);
         ui_runtime
-    })
+    }))
     .insert_resource(client_state::PlayerRuntime(player_state::PlayerState::new(
         0,
     )))
-    .insert_resource(ui_presentation)
+    .insert_resource(UiPresentationResource(ui_presentation))
     .insert_resource(WorldClock::default())
     .insert_resource(WeatherState::default())
     .init_resource::<environment::WeatherTickFrame>()
@@ -790,7 +800,7 @@ pub fn run(args: args::ClientArgs) -> Result<()> {
     .insert_resource(movement_ticker)
     .insert_resource(if args.freecam || args.auto_fly {
         PhysicsAuthorityGate::ProductionDisabled
-    } else if args.phase3_candidate_physics {
+    } else if args.movement_candidate_physics {
         PhysicsAuthorityGate::CandidateEvidence
     } else {
         PhysicsAuthorityGate::ProductionEnabled
@@ -841,7 +851,7 @@ pub fn run(args: args::ClientArgs) -> Result<()> {
     .insert_resource(DiagnosticQuads::default())
     .insert_resource(render_scene::BlockEntitySceneResource(block_entity_scene))
     .insert_resource(PublicationController::new(
-        PublicationServiceConfig::PHASE2_GATE,
+        PublicationServiceConfig::DEFAULT,
     ));
     #[cfg(feature = "acceptance")]
     app.add_plugins(acceptance::AcceptancePlugin {
@@ -856,7 +866,7 @@ pub fn run(args: args::ClientArgs) -> Result<()> {
         const MAIN_FRAME: usize = render_scene::RuntimeStage::MainFrame as usize;
         app.insert_resource(RuntimeStageProfiler::for_gameplay(
             stage_profile_enabled,
-            std::env::var_os(diagnostics::markers::STAGE_PROFILE_FRAMES)
+            env_compat::var_os(diagnostics::markers::STAGE_PROFILE_FRAMES)
                 .map(std::path::PathBuf::from),
         ))
         .init_resource::<render_scene::RuntimeStageSpans>()
@@ -885,11 +895,11 @@ pub fn run(args: args::ClientArgs) -> Result<()> {
         ActorRenderPlugin,
         AtmospherePlugin,
         ChunkRenderPlugin::with_budget(
-            PublicationController::new(PublicationServiceConfig::PHASE2_GATE).budget(),
+            PublicationController::new(PublicationServiceConfig::DEFAULT).budget(),
         ),
         FlyCameraPlugin::with_startup_capture(
             args.auto_fly,
-            args.auto_fly || args.freecam || args.phase3_candidate_physics,
+            args.auto_fly || args.freecam || args.movement_candidate_physics,
         ),
         UiRenderPlugin,
         render::ViewmodelRenderPlugin,
@@ -925,7 +935,7 @@ pub fn run(args: args::ClientArgs) -> Result<()> {
         app.insert_resource(render_scene::ViewmodelGeometryResource(geometry));
     }
     #[cfg(feature = "acceptance")]
-    if let Some(identity) = phase3_identity_source {
+    if let Some(identity) = movement_identity_source {
         app.insert_resource(identity);
     }
     crate::global_resources::configure(&mut app, global_pack_root, args.import_packs);
@@ -950,6 +960,7 @@ pub fn run(args: args::ClientArgs) -> Result<()> {
     #[cfg(feature = "enhanced-diagnostics")]
     crate::enhanced_diagnostics::install(&mut app, diagnostic_budget);
     executor::configure_frame_schedule_executors(&mut app);
+    startup::install_first_frame_log(&mut app);
     let exit = app.run();
     client_shell::discord_presence::shutdown(&mut app);
     if let Some(mut network) = app

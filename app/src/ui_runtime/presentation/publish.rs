@@ -1,6 +1,6 @@
 //! Per-frame HUD observation and publication.
 use crate::runtime::network::resource_packs::PackApplication;
-use bevy::prelude::Transform;
+use bevy::prelude::{Local, Transform};
 use client_runtime::network::NetworkHandle;
 use inventory::inventory_ledger::PlayerInventorySlot;
 use {super::*, client_presentation::camera::CameraSettingsAuthority};
@@ -11,14 +11,18 @@ mod commit;
 mod cooldowns;
 mod loading;
 use client_ui::ui_runtime::presentation::{
-    ItemIconFrames, PendingUiPublication, PreparedUiPublication, PreviewCapture, capture_hud_frame,
-    nametags, player_preview,
+    ItemIconFrames, PendingUiPublication, PreviewCapture, capture_hud_frame, nametags,
+    player_preview,
 };
 pub(crate) use commit::publish_ui_runtime;
 
+/// The UI authority captured before input enqueue, rendered once by `publish_ui_runtime`.
+#[derive(bevy::prelude::Resource, Default)]
+pub(crate) struct PreparedUiPublication(pub(crate) Option<PendingUiPublication>);
+
 pub(crate) fn observe_mount_jump_input(
     input: Res<client_state::SemanticInputSnapshot>,
-    mut runtime: ResMut<UiRuntime>,
+    mut runtime: ResMut<UiRuntimeResource>,
     time: Res<Time<Real>>,
 ) {
     let now_millis = u64::try_from(time.elapsed().as_millis()).unwrap_or(u64::MAX);
@@ -40,7 +44,7 @@ fn hand_first_person(
 }
 
 /// Resources beyond Bevy's sixteen-parameter limit.
-type PublishExtras<'w> = (
+type PublishExtras<'w, 's> = (
     Res<'w, WorldStreamFramePoll>,
     Res<'w, client_shell::menu::MenuRuntime>,
     Res<'w, client_presentation::actor_publication::ActorFrameState>,
@@ -49,6 +53,7 @@ type PublishExtras<'w> = (
     Option<Res<'w, render_scene::ActorPipelineReadiness>>,
     Option<Res<'w, render_scene::PipelineWarmupReadiness>>,
     Option<Res<'w, client_presentation::camera::ServerCameraView>>,
+    Local<'s, nametags::NametagTextCache>,
     (
         Res<'w, client_presentation::actor_publication::ActorFramePartialTick>,
         Res<'w, client_presentation::local_player::LocalPlayerFrameCarrier>,
@@ -66,8 +71,8 @@ type PublishExtras<'w> = (
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn prepare_ui_runtime(
     player_runtime: bevy::prelude::Res<client_state::PlayerRuntime>,
-    mut runtime: ResMut<UiRuntime>,
-    mut presentation: ResMut<UiPresentationRuntime>,
+    mut runtime: ResMut<UiRuntimeResource>,
+    mut presentation: ResMut<UiPresentationResource>,
     mut prepared: ResMut<PreparedUiPublication>,
     visibility: Res<CaveVisibilityCache>,
     mut diagnostics_input: ResMut<VisibilityDiagnosticsInput>,
@@ -89,6 +94,7 @@ pub(crate) fn prepare_ui_runtime(
         actor_pipelines,
         warmed_pipelines,
         server_camera,
+        mut nametag_cache,
         (
             actor_partial,
             local_frame,
@@ -122,8 +128,6 @@ pub(crate) fn prepare_ui_runtime(
         hand.clear();
         return;
     }
-    let logical_width = physical_size[0] as f32 / window.scale_factor();
-    let logical_height = physical_size[1] as f32 / window.scale_factor();
     let dpi_scale = match DpiScale::new(window.scale_factor()) {
         Ok(scale) => scale,
         Err(error) => {
@@ -347,6 +351,7 @@ pub(crate) fn prepare_ui_runtime(
         .value("ingame_player_names")
         != 0;
     let tag_style = presentation
+        .mod_ui()
         .mod_actor_style()
         .and_then(|style| style.nametags.as_ref());
     let show_self_tag =
@@ -365,15 +370,14 @@ pub(crate) fn prepare_ui_runtime(
             cameras
                 .single()
                 .ok()
-                .map(|(camera, transform)| (camera, GlobalTransform::from(*transform))),
+                .map(|(_, transform)| GlobalTransform::from(*transform)),
         )
-        .map(|(stream, (camera, transform))| {
+        .map(|(stream, transform)| {
             let mut tags = nametags::project_nametags(
+                &mut nametag_cache,
                 runtime.scoreboards(),
                 stream,
-                camera,
-                &transform,
-                [logical_width, logical_height],
+                transform.translation(),
                 picked_nametag_actor(stream, &transform, collisions.as_deref(), &player_runtime),
                 actor_partial.0,
                 show_names && !tag_style.is_some_and(|style| style.hide_players),
@@ -503,7 +507,7 @@ fn station_triggered(
         Default::default(),
     );
     let runtime_id = world.primary_runtime_id(position).ok()?;
-    assets::pinned_block_presentation_states()
+    assets::block_presentation_state::pinned_block_presentation_states()
         .get(mode, runtime_id)
         .crafter_triggered
 }

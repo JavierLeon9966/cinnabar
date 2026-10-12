@@ -6,8 +6,8 @@ use bevy::ecs::system::RunSystemOnce;
 )]
 mod render_test_support;
 
-#[path = "../src/alloc_count.rs"]
-mod alloc_count;
+#[global_allocator]
+static ALLOCATOR: test_alloc::CountingAllocator = test_alloc::CountingAllocator;
 
 #[path = "../src/device_poll.rs"]
 #[allow(
@@ -42,6 +42,7 @@ mod shader_safety;
 )]
 pub mod ui_render;
 #[path = "../src/upload_staging.rs"]
+#[allow(dead_code, reason = "the UI fixture installs only the frame pool")]
 mod upload_staging;
 
 // This standalone UI fixture installs no camera-effect scene. Production's

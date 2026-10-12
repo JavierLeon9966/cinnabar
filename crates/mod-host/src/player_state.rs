@@ -16,7 +16,7 @@ pub(super) struct PlayerState {
     current_revision: Option<u64>,
     revision: u64,
     reads: u32,
-    pub observations: crate::ModuleObservations,
+    pub observations: crate::module_observations::ModuleObservations,
     pub world: Option<crate::WorldObservation>,
     pub fps: Option<f32>,
     pub sidebar: Option<crate::SidebarSnapshot>,
@@ -137,14 +137,14 @@ impl cinnabar::extension::player_state::Host for State {
         if !self.grants.player_state {
             return Ok(Err("player-state capability denied".into()));
         }
-        Ok(Ok(self.player_state.observations.motion.clone()))
+        Ok(Ok(self.player_state.observations.motion))
     }
     fn read_vitals(&mut self) -> Result<Result<Option<crate::VitalsObservation>, String>> {
         self.player_state.read_budget()?;
         if !self.grants.player_state {
             return Ok(Err("player-state capability denied".into()));
         }
-        Ok(Ok(self.player_state.observations.vitals.clone()))
+        Ok(Ok(self.player_state.observations.vitals))
     }
     fn read_ping(&mut self) -> Result<Result<Option<u32>, String>> {
         self.player_state.read_budget()?;

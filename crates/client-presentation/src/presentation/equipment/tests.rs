@@ -1,3 +1,4 @@
+use render_api::PoseGeneration;
 #[path = "runtime/elytra_tests.rs"]
 mod elytra_tests;
 
@@ -140,7 +141,7 @@ fn equipment_layer_keeps_body_placement_without_its_hurt_overlay() {
                 ingress_sequence: 4,
                 source_tick: None,
                 movement_revision: 5,
-                pose_generation: 6,
+                pose_generation: PoseGeneration::new(6),
                 layer: ACTOR_LAYER_BODY,
             },
             rig: EntityRigId(0),
@@ -305,7 +306,7 @@ fn real_carriers_draw_armor_and_report_each_held_item() {
                 ingress_sequence: 1,
                 source_tick: None,
                 movement_revision: 0,
-                pose_generation: 0,
+                pose_generation: PoseGeneration::new(0),
                 layer: ACTOR_LAYER_BODY,
             },
             rig,
@@ -327,6 +328,7 @@ fn real_carriers_draw_armor_and_report_each_held_item() {
         overlay_rgba8: 0,
     };
     let worn = |identifier: &str| WornItem {
+        use_facts: client_world::EffectiveItemUse::default(),
         grip: assets::item::grip::builtin_item_grip(identifier),
         identifier: Arc::from(identifier),
         metadata: 0,
@@ -397,7 +399,7 @@ fn player_body(runtime: &mut super::runtime::EquipmentRuntime) -> ActorRigSubmis
                 ingress_sequence: 1,
                 source_tick: None,
                 movement_revision: 0,
-                pose_generation: 0,
+                pose_generation: PoseGeneration::new(0),
                 layer: ACTOR_LAYER_BODY,
             },
             rig,
@@ -453,7 +455,7 @@ fn pack_runtime(
     );
     let (pages, locations) =
         pages.with_equipment_rasters(&EquipmentRuntime::pack_rasters(&catalog));
-    runtime.set_pack_layer(Some((entities, catalog, locations)));
+    runtime.set_pack_layer(Some((entities, Some(catalog), locations)));
     (runtime, pages)
 }
 
@@ -530,6 +532,7 @@ fn wearable_slot_places_an_unnamed_custom_attachable_on_the_body() {
     let (mut runtime, _) = pack_runtime(crown_pack());
     let body = player_body(&mut runtime);
     let crown = WornItem {
+        use_facts: client_world::EffectiveItemUse::default(),
         grip: assets::item::grip::builtin_item_grip("test:crown"),
         identifier: Arc::from("test:crown"),
         metadata: 0,
@@ -560,6 +563,7 @@ fn first_person_session_icon_is_independent_of_avatar_bones_and_keeps_its_atlas(
     let (mut runtime, pages) = pack_runtime(crown_pack());
     let body = player_body(&mut runtime);
     let item = WornItem {
+        use_facts: client_world::EffectiveItemUse::default(),
         grip: assets::item::grip::builtin_item_grip("test:gem"),
         identifier: Arc::from("test:gem"),
         metadata: 0,
@@ -621,6 +625,7 @@ fn custom_items_hold_their_session_icon_with_the_component_grip() {
     let body = player_body(&mut runtime);
     let held = |identifier: &str| ActorEquipmentInput {
         main: Some(WornItem {
+            use_facts: client_world::EffectiveItemUse::default(),
             grip: if identifier == "test:blade" {
                 assets::item::grip::ItemGrip::Session {
                     upright: true,
@@ -681,6 +686,7 @@ fn custom_block_items_with_a_cube_sheet_are_held_as_blocks() {
     let (mut runtime, pages) = pack_runtime(crown_pack());
     let body = player_body(&mut runtime);
     let item = WornItem {
+        use_facts: client_world::EffectiveItemUse::default(),
         grip: assets::item::grip::builtin_item_grip("test:controller"),
         identifier: Arc::from("test:controller"),
         metadata: 0,
@@ -839,6 +845,7 @@ fn java_grips_ride_the_arm_and_skip_the_hurt_flash() {
     body.overlay_rgba8 = 0x6600_00ff;
     let input = ActorEquipmentInput {
         main: Some(WornItem {
+            use_facts: client_world::EffectiveItemUse::default(),
             grip: assets::item::grip::builtin_item_grip("test:gem"),
             identifier: Arc::from("test:gem"),
             metadata: 0,
@@ -876,6 +883,7 @@ fn sprite_items_and_worn_attachables_skip_the_hurt_overlay() {
     let mut body = player_body(&mut runtime);
     body.overlay_rgba8 = 0x6600_00ff;
     let item = WornItem {
+        use_facts: client_world::EffectiveItemUse::default(),
         grip: assets::item::grip::builtin_item_grip("test:gem"),
         identifier: Arc::from("test:gem"),
         metadata: 0,
@@ -905,6 +913,7 @@ fn sprite_items_and_worn_attachables_skip_the_hurt_overlay() {
         off: Some(item.clone()),
         armor: [
             Some(WornItem {
+                use_facts: client_world::EffectiveItemUse::default(),
                 grip: assets::item::grip::builtin_item_grip("test:crown"),
                 identifier: Arc::from("test:crown"),
                 ..item.clone()

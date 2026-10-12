@@ -179,11 +179,11 @@ jobs:
         run: |
           bin="$PWD/target/$CARGO_BUILD_TARGET/release"
           make package-binaries PACKAGE_CARGO_FLAGS=--timings DIST_CORE="$bin/bedrock-core" LOCAL_SERVER_OUT="$bin/bedrock-local-server"
-          for binary in bedrock-client bedrock-core bedrock-local-server assetc; do
+          for binary in cinnabar bedrock-core bedrock-local-server assetc; do
             lipo "$bin/$binary" -verify_arch "${{ matrix.arch }}"
           done
           tools="$GITHUB_WORKSPACE/release-tools/packaging/macos"
-          CLIENT="$bin/bedrock-client" CORE="$bin/bedrock-core" \
+          CLIENT="$bin/cinnabar" CORE="$bin/bedrock-core" \
             LOCAL_SERVER="$bin/bedrock-local-server" ASSETC="$bin/assetc" bash "$tools/build-app.sh"
           bash "$tools/sign-notarize.sh" .local/dist/macos-release/Cinnabar.app
           version="${{ needs.prepare.outputs.version }}"
@@ -593,8 +593,12 @@ jobs:
             gh release edit "$RELEASE_TAG" --title "$RELEASE_TAG" \
               --notes-file "$RUNNER_TEMP/notes.md" --draft=false --prerelease=false
           else
+            # Notes start at the last published release, not the last tag, so a tag left by an
+            # unpublished attempt cannot shrink them.
+            previous="$(gh release list --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName // empty')"
             gh release create "$RELEASE_TAG" dist/* --verify-tag --target "$RELEASE_COMMIT" \
-              --title "$RELEASE_TAG" --generate-notes --notes-file "$RUNNER_TEMP/notes.md"
+              --title "$RELEASE_TAG" --generate-notes ${previous:+--notes-start-tag "$previous"} \
+              --notes-file "$RUNNER_TEMP/notes.md"
             echo "created=true" >> "${GITHUB_OUTPUT:-/dev/null}"
           fi
       - name: Post the changelog to Discord

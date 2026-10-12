@@ -21,6 +21,8 @@ mod merge;
 mod pack;
 mod parser;
 mod subpacks;
+#[cfg(all(feature = "handoff", any(test, feature = "test-support")))]
+pub mod test_support;
 mod view;
 
 pub use dependencies::{PackDependencies, PackDependency};
@@ -111,7 +113,7 @@ pub enum PackAdmission {
     Validated(Arc<ValidatedPackStack>),
 }
 
-/// Admits a one-shot handoff pack by pack, preserving stack order.
+/// Admits a highest-priority-first server handoff into lowest-priority-first layers.
 #[cfg(feature = "handoff")]
 #[must_use]
 pub fn validate_handoff(handoff: ResourcePackHandoff) -> Arc<ValidatedPackStack> {

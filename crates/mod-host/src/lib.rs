@@ -8,7 +8,7 @@ pub use grants::ModGrants;
 #[cfg(feature = "execution")]
 mod load;
 #[cfg(feature = "execution")]
-mod module_observations;
+pub mod module_observations;
 #[cfg(feature = "execution")]
 mod outputs;
 #[cfg(feature = "execution")]
@@ -43,17 +43,6 @@ pub use runtime::cinnabar::extension::player_state::{
 pub use runtime::cinnabar::extension::{
     events::Cue as ModCue, input::Controls as ControlFrame, panel::Event as ControlEvent,
 };
-
-/// Callback-scoped read-only facts captured by native owning adapters.
-#[cfg(feature = "execution")]
-#[derive(Clone, Default)]
-pub struct ModuleObservations {
-    pub motion: Option<MotionObservation>,
-    pub vitals: Option<VitalsObservation>,
-    pub ping_ms: Option<u32>,
-    pub actors: Vec<ActorObservation>,
-    pub combat: Vec<CombatObservation>,
-}
 
 /// Successfully committed local interaction requests, consumed once per frame.
 #[cfg(feature = "execution")]
@@ -189,7 +178,10 @@ impl ModHost {
     }
 
     /// Supplies bounded, session-fenced cosmetic facts for the next callback only.
-    pub fn observe_modules(&mut self, observations: ModuleObservations) -> Result<()> {
+    pub fn observe_modules(
+        &mut self,
+        observations: module_observations::ModuleObservations,
+    ) -> Result<()> {
         self.instance.observe_modules(observations)
     }
 
@@ -258,22 +250,6 @@ impl ModHost {
         self.settings_writer
             .as_ref()
             .and_then(settings::SettingsWriter::take_error)
-    }
-
-    pub fn panel(&self) -> Option<&ui::mod_panel::Panel> {
-        self.instance.panel()
-    }
-    pub fn panel_open(&self) -> bool {
-        self.instance.panel_open()
-    }
-    pub fn set_panel_open(&mut self, open: bool) {
-        self.instance.set_panel_open(open);
-    }
-    pub fn reserved_keys(&self) -> &[String] {
-        self.instance.reserved_keys()
-    }
-    pub fn take_interaction(&mut self) -> InteractionOutput {
-        self.instance.take_interaction()
     }
 
     /// Retained request from a successful callback, independent of UI focus.

@@ -30,7 +30,7 @@ pub struct ActorTickContext {
     pub main_hand_slot: u8,
     /// Current local Bedrock duration; zero retains the duration of a remote swing.
     pub bedrock_swing_ticks: i32,
-    /// Current local Java swing length after haste and fatigue; remote swings use the default.
+    /// Current Java swing length after haste and fatigue.
     pub java_swing_ticks: i32,
     /// A held crossbow is loaded.
     pub hand_charged: bool,
@@ -223,6 +223,7 @@ pub(super) fn advance_motion(
         state.history.pop_front();
     }
     let input = ActorTickInput {
+        placement_frame: state.placement_frame,
         position: actor.position(),
         position_delta,
         velocity: actor.velocity(),
@@ -266,6 +267,7 @@ pub(super) fn seed_presentation_input(
         ..Default::default()
     });
     let input = ActorTickInput {
+        placement_frame: state.placement_frame,
         position: actor.position(),
         velocity: actor.velocity(),
         on_ground: actor.on_ground(),

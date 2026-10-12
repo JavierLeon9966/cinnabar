@@ -12,7 +12,7 @@ use assets::{
 use protocol::{ActorKind, ActorMetadataValue};
 
 /// Simulation tick duration used by actor clocks and Molang time queries.
-use world::TICK_DURATION as ACTOR_TICK_DURATION;
+use simulation_clock::TICK_DURATION as ACTOR_TICK_DURATION;
 
 pub const MAX_RUNTIME_BONES_PER_RIG: usize = assets::MAX_ENTITY_GEOMETRY_BONES;
 const ANIMATION_TICK_SECONDS: f32 = ACTOR_TICK_DURATION.as_secs_f32();
@@ -59,7 +59,7 @@ pub use java::{JavaHeldItem, JavaMotion, java_mounted_body_yaw, java_walked_dist
 mod motion;
 mod particles;
 mod pose;
-pub use particles::ActorParticleController;
+pub use particles::{ActorParticleController, ActorParticleQueries};
 mod query;
 mod render;
 mod render_frame;
@@ -79,7 +79,7 @@ pub use attachable::{
 pub use evaluation::ActorAnimationVariables;
 use evaluation::{EngineSlots, Evaluator, MolangValue, MolangVariables, VariableLayout};
 use geometry::{collect_controllers, resolve_binding, resolve_bones, skeleton};
-pub use motion::ACTOR_SWING_TICKS;
+pub use motion::{ACTOR_SWING_TICKS, SwingEffects};
 use motion::{MotionInput, MotionState};
 pub use pose::MODEL_PART_ORIGIN_Y;
 use pose::{compose_pose, sample_clips};
