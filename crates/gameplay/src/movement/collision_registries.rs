@@ -406,7 +406,12 @@ impl PhysicsCollisionRegistries {
                         physics.surface_response,
                     )
                     .ok()?;
-                apply_selection(&mut self.sequential, next, effective.selection, effective.transformation);
+                apply_selection(
+                    &mut self.sequential,
+                    next,
+                    effective.selection,
+                    effective.transformation,
+                );
                 if let Some(offset) = effective.random_offset {
                     self.sequential.set_random_offset(next, offset);
                 }
@@ -463,7 +468,12 @@ impl PhysicsCollisionRegistries {
                             connections: None,
                         },
                     );
-                    apply_selection(&mut self.hashed, state.hash, effective.selection, effective.transformation);
+                    apply_selection(
+                        &mut self.hashed,
+                        state.hash,
+                        effective.selection,
+                        effective.transformation,
+                    );
                     if let Some(offset) = effective.random_offset {
                         self.hashed.set_random_offset(state.hash, offset);
                     }
@@ -596,26 +606,8 @@ fn custom_block_boxes(block: &protocol::CustomBlockPhysics) -> impl Iterator<Ite
         .filter(move |_| block.collides)
 }
 
-/// Applies a block transformation about the block centre to one point in block
-/// units, exactly as the overlay transform applies it to geometry.
-fn transform_point(value: [f32; 3], transform: protocol::CustomTransformation) -> [f32; 3] {
-    let mut point = value.map(|coordinate| coordinate * 16.0 - 8.0);
-    for (axis, scale) in point.iter_mut().zip(transform.scale) {
-        *axis *= scale;
-    }
-    for (axis, turns) in transform.rotation.into_iter().enumerate() {
-        for _ in 0..turns.rem_euclid(4) {
-            point = block_transform::rotation::rotate_quarter(point, axis);
-        }
-    }
-    for (axis, offset) in point.iter_mut().zip(transform.translation) {
-        *axis += offset * 16.0;
-    }
-    point.map(|coordinate| (coordinate + 8.0) / 16.0)
-}
-
-/// Rebuilds the bounding box of one authored box under a state's transformation,
-/// so a face-attached block's collision follows the same face as its geometry.
+/// The bounds of one authored box under a state's transformation, so collision and
+/// selection follow the same face as the geometry.
 fn transformed_box(
     shape: protocol::CustomBox,
     transform: Option<protocol::CustomTransformation>,
@@ -626,12 +618,16 @@ fn transformed_box(
     let mut min = [f32::INFINITY; 3];
     let mut max = [f32::NEG_INFINITY; 3];
     for bits in 0..8_u32 {
-        let corner = [
-            if bits & 1 != 0 { shape.max[0] } else { shape.min[0] },
-            if bits & 2 != 0 { shape.max[1] } else { shape.min[1] },
-            if bits & 4 != 0 { shape.max[2] } else { shape.min[2] },
-        ];
-        let point = transform_point(corner, transform);
+        let corner = [0, 1, 2].map(|axis| {
+            if bits >> axis & 1 != 0 {
+                shape.max[axis]
+            } else {
+                shape.min[axis]
+            }
+        });
+        let point = transform
+            .apply(corner.map(|coordinate| coordinate * 16.0 - 8.0))
+            .map(|coordinate| (coordinate + 8.0) / 16.0);
         for axis in 0..3 {
             min[axis] = min[axis].min(point[axis]);
             max[axis] = max[axis].max(point[axis]);
@@ -639,7 +635,6 @@ fn transformed_box(
     }
     protocol::CustomBox { min, max }
 }
-
 
 /// Applies the block's selection box to a registered state's pick ray.
 fn apply_selection(
@@ -651,7 +646,9 @@ fn apply_selection(
     let shapes = match selection {
         protocol::CustomSelection::Default => vec![Aabb::new(Vec3::ZERO, Vec3::ONE)],
         protocol::CustomSelection::Disabled => Vec::new(),
-        protocol::CustomSelection::Box(shape) => vec![box_to_aabb(transformed_box(shape, transform))],
+        protocol::CustomSelection::Box(shape) => {
+            vec![box_to_aabb(transformed_box(shape, transform))]
+        }
     };
     registry.set_pick_shapes(id, shapes);
 }

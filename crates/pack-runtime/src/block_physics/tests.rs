@@ -201,6 +201,41 @@ fn aggregate_state_reservation_is_bounded_and_does_not_expand_for_rejected_block
     assert_eq!(blocks.blocks[2].state_physics.len(), 1);
 }
 
+#[path = "tests/fixture.rs"]
+mod fixture;
+
+#[test]
+fn random_offset_state_overrides_are_prepared_once_in_palette_order() {
+    let mut block = slab();
+    let base = block_transform::random_offset::BAMBOO;
+    let zero = block_transform::random_offset::RandomOffsetComponent::default();
+    let visual = Arc::make_mut(&mut block.visual);
+    visual.base.random_offset = Some(base);
+    visual.permutations = Box::new([protocol::CustomPermutation {
+        condition: "q.block_state('minecraft:vertical_half') == 'top'".into(),
+        components: protocol::CustomVisualComponents {
+            random_offset: Some(zero),
+            ..Default::default()
+        },
+        physical: protocol::CustomPhysicalComponents {
+            random_offset: Some(zero),
+            ..Default::default()
+        },
+    }]);
+    let mut blocks = CustomBlocks {
+        blocks: Arc::from([block]),
+        ..Default::default()
+    };
+    resolve(&mut blocks);
+    assert_eq!(blocks.skipped, 0);
+    for (state, expected) in [(0, base), (1, zero), (2, base), (3, base)] {
+        assert_eq!(
+            blocks.blocks[0].physics_for_state(state).random_offset,
+            Some(expected)
+        );
+    }
+}
+
 /// Zigzag VarInt element count for a network NBT list.
 fn count(elements: usize) -> Vec<u8> {
     let mut zigzag = (elements as i64) << 1;
@@ -275,35 +310,17 @@ fn face_attached() -> protocol::CustomBlocks {
     protocol::CustomBlocks::from_definitions([("test:face_facing", encoded.as_slice())])
 }
 
-/// Each `block_face` state must carry the authored quarter turns.
-#[test]
-fn transformation_only_permutations_reach_the_state_physics() {
-    let mut blocks = face_attached();
-    resolve(&mut blocks);
-    assert_eq!(blocks.skipped, 0);
-    let block = &blocks.blocks[0];
-    assert_eq!(block.state_count, 6);
-    assert_eq!(block.state_physics.len(), 6);
-    // `up` has no permutation, so it keeps the base transform.
-    assert!(block.physics_for_state(1).transformation.is_none());
-    for state in [0, 2, 3, 4, 5] {
-        assert!(
-            block.physics_for_state(state).transformation.is_some(),
-            "state {state} lost its authored transformation"
-        );
-    }
-}
-
-/// Every state's authored turn reaches its physics record; the base box stays
-/// untouched here because the collision registry applies the transform.
+/// Transformation-only permutations are physical: each face state keeps its own turn.
 #[test]
 fn every_face_state_carries_its_own_turn() {
     let mut blocks = face_attached();
     resolve(&mut blocks);
+    assert_eq!(blocks.skipped, 0);
     let block = &blocks.blocks[0];
+    assert_eq!(block.state_physics.len(), 6);
     let expected: [(u32, Option<[i32; 3]>); 6] = [
         (0, Some([2, 0, 0])),
-        (1, None),       // up: the default face, no permutation
+        (1, None), // up: the default face, no permutation
         (2, Some([1, 2, 0])),
         (3, Some([1, 0, 0])),
         (4, Some([2, 1, 3])),
@@ -311,16 +328,19 @@ fn every_face_state_carries_its_own_turn() {
     ];
     for (state, rotation) in expected {
         assert_eq!(
-            block.physics_for_state(state).transformation.map(|t| t.rotation),
+            block
+                .physics_for_state(state)
+                .transformation
+                .map(|t| t.rotation),
             rotation,
             "turn for state {state}"
         );
     }
 }
 
-/// A later matching permutation re-aims the boxes but keeps the face's turn.
+/// A later permutation without a transformation replaces the boxes and inherits the turn.
 #[test]
-fn a_later_permutation_replaces_the_transform_it_contributes() {
+fn a_later_permutation_without_a_transform_inherits_the_earlier_turn() {
     let mut blocks = face_attached();
     resolve(&mut blocks);
     let block = Arc::make_mut(&mut blocks.blocks);
@@ -357,11 +377,16 @@ fn a_later_permutation_replaces_the_transform_it_contributes() {
         .expect("the earlier permutation still contributes its transform");
     assert_eq!(east.rotation, [0, 1, 3]);
     assert_eq!(
-        blocks.blocks[0].physics_for_state(5).collision_boxes.as_deref(),
-        Some([protocol::CustomBox {
-            min: [0.0; 3],
-            max: [1.0; 3]
-        }]
-        .as_slice())
+        blocks.blocks[0]
+            .physics_for_state(5)
+            .collision_boxes
+            .as_deref(),
+        Some(
+            [protocol::CustomBox {
+                min: [0.0; 3],
+                max: [1.0; 3]
+            }]
+            .as_slice()
+        )
     );
 }

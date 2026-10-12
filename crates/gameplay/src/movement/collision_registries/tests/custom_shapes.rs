@@ -396,8 +396,10 @@ fn face_attached_block_boxes_follow_the_authored_turn_in_both_id_spaces() {
         ([0.5, 0.0, 0.0], [1.0, 1.0, 1.0]), // east
     ];
     for (index, (min, max)) in expected.into_iter().enumerate() {
-        let shape =
-            Aabb::new(Vec3::new(min[0], min[1], min[2]), Vec3::new(max[0], max[1], max[2]));
+        let shape = Aabb::new(
+            Vec3::new(min[0], min[1], min[2]),
+            Vec3::new(max[0], max[1], max[2]),
+        );
         for (registry, id) in [
             (&registries.sequential, range.start + index as u32),
             (&registries.hashed, hashes[index]),

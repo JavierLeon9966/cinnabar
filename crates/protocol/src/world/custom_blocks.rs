@@ -123,6 +123,25 @@ pub struct CustomTransformation {
     pub translation: [f32; 3],
 }
 
+impl CustomTransformation {
+    /// Transforms a point given in pixels from the block centre; geometry and boxes share it.
+    #[must_use]
+    pub fn apply(&self, mut point: [f32; 3]) -> [f32; 3] {
+        for (value, scale) in point.iter_mut().zip(self.scale) {
+            *value *= scale;
+        }
+        for (axis, turns) in self.rotation.into_iter().enumerate() {
+            for _ in 0..turns.rem_euclid(4) {
+                point = block_transform::rotation::rotate_quarter(point, axis);
+            }
+        }
+        for (value, offset) in point.iter_mut().zip(self.translation) {
+            *value += offset * 16.0;
+        }
+        point
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct CustomPermutation {
     pub condition: Arc<str>,
