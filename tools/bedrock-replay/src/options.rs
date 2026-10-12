@@ -11,8 +11,8 @@ pub struct Options {
     pub socket_dir: PathBuf,
     pub report: PathBuf,
     pub packs: Vec<PathBuf>,
-    /// AES content keys for encrypted server packs, paired positionally with
-    /// `packs`; a pack without a key entry is read as unencrypted.
+    /// AES content keys in pack order. Either this list is empty, or every pack
+    /// has an entry, with an empty string for each unencrypted pack.
     pub pack_keys: Vec<String>,
     pub burst_packets: usize,
     pub burst_bytes: usize,
@@ -84,8 +84,8 @@ impl Options {
             "invalid replay bounds"
         );
         ensure!(
-            result.pack_keys.len() <= result.packs.len(),
-            "content keys need a matching resource pack"
+            result.pack_keys.is_empty() || result.pack_keys.len() == result.packs.len(),
+            "provide one content key per resource pack, using -content-key= for plain packs"
         );
         Ok(Some(result))
     }
@@ -157,4 +157,4 @@ fn parse_duration(text: &str) -> Result<Duration> {
     Ok(Duration::from_nanos(nanos as u64))
 }
 
-pub const HELP: &str = "bedrock-replay -capture raw.bin -socket-dir DIR -report report.json\n  -resource-pack FILE (repeat in stack order)\n  -content-key KEY (repeat positionally per encrypted pack; omit for plain packs)\n  -burst-packets 32 -burst-bytes 8388608 -burst-interval 50ms\n  -timeout 2m -hold 0s\n";
+pub const HELP: &str = "bedrock-replay -capture raw.bin -socket-dir DIR -report report.json\n  -resource-pack FILE (repeat in stack order)\n  -content-key KEY (one per resource pack, in stack order; use -content-key= for plain packs)\n    Omit all content keys when every pack is plain.\n  -burst-packets 32 -burst-bytes 8388608 -burst-interval 50ms\n  -timeout 2m -hold 0s\n";

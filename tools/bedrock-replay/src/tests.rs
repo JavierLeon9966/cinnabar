@@ -81,20 +81,49 @@ fn options_reject_invalid_runs_and_keep_go_flag_forms() {
     assert!(Options::parse(["-h".into()]).unwrap().is_none());
 }
 
-/// Content keys pair positionally with packs; a dangling key is rejected.
+/// Empty placeholders keep encrypted pack keys aligned, and partial lists are rejected.
 #[test]
-fn content_keys_pair_positionally_with_packs() {
-    let packs = ["-resource-pack", "a.mcpack", "-resource-pack", "b.mcpack"].map(str::to_owned);
+fn content_keys_require_one_entry_per_pack_or_no_keys() {
+    let packs = [
+        "-resource-pack",
+        "plain.mcpack",
+        "-resource-pack",
+        "encrypted.mcpack",
+    ]
+    .map(str::to_owned);
     let opts = Options::parse(
         arguments()
             .into_iter()
-            .chain(packs)
-            .chain(["-content-key".into(), "first".into()]),
+            .chain(packs.clone())
+            .chain(["-content-key=", "--content-key=encrypted-key"].map(str::to_owned)),
     )
     .unwrap()
     .unwrap();
     assert_eq!(opts.packs.len(), 2);
-    assert_eq!(opts.pack_keys, ["first"]);
+    assert_eq!(opts.pack_keys, ["", "encrypted-key"]);
+    let opts = Options::parse(arguments().into_iter().chain(packs.clone()))
+        .unwrap()
+        .unwrap();
+    assert!(opts.pack_keys.is_empty());
+    for keys in [
+        vec!["-content-key", "encrypted-key"],
+        vec!["-content-key", ""],
+        vec![
+            "-content-key=",
+            "-content-key=encrypted-key",
+            "-content-key=",
+        ],
+    ] {
+        assert!(
+            Options::parse(
+                arguments()
+                    .into_iter()
+                    .chain(packs.clone())
+                    .chain(keys.into_iter().map(str::to_owned))
+            )
+            .is_err()
+        );
+    }
     assert!(
         Options::parse(
             arguments()
