@@ -538,7 +538,7 @@ impl Builder<'_> {
             ) {
                 return None;
             }
-            let reference = self.fallback.as_ref()?.texture(key)?;
+            let reference = self.fallback.as_ref()?.texture(key, storage_key.tint)?;
             Some(TextureSlot {
                 page: reference.page(),
                 layer: reference.layer(),

@@ -8364,7 +8364,9 @@ expressions still need their own admission and coverage work.
 Implemented: custom blocks naming vanilla textures absent from the server
 stack can borrow a static page-0 texture from the matching base carrier.
 The resolver uses the retained atlas and UV indices to select variant zero,
-independent of material ID order. Server material flags remain overlay-local,
+independent of material ID order. Donors must have the catalog's requested
+tint already baked into their pixels; missing or different tints decline
+fallback. Server material flags remain overlay-local,
 and borrowing consumes no texture layer or byte budget. Server rasters take
 precedence when they decode; capacity and budget refusals remain refusals.
 Borrowed layers are validated against the base page, and vanilla material

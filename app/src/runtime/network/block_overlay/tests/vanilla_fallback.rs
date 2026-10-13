@@ -314,3 +314,72 @@ fn custom_fallback_rejects_redirected_catalog_routes_without_pack_pixels() {
         }
     }
 }
+
+#[test]
+fn custom_fallback_preserves_catalog_tint_or_stays_diagnostic() {
+    use assets::material_keys::{MaterialKeys, MaterialTextureSource};
+    use serde_json::json;
+
+    let tint = [32_u8, 128, 48];
+    let mut materials = base_materials();
+    materials[1].texture = assets::TextureRef::new(0, 1).unwrap();
+    materials[2].texture = assets::TextureRef::new(0, 2).unwrap();
+    let base = base(materials);
+    let blocks = CustomBlocks {
+        blocks: vec![chair("test:lily_chair", "waterlily")].into(),
+        ..Default::default()
+    };
+    for copied_tint in [Some(tint), None, Some([48, 128, 32])] {
+        let keys = MaterialKeys::from_entries([(1, "waterlily"), (2, "waterlily")])
+            .with_aliases([("waterlily", "textures/blocks/waterlily")])
+            .with_fixed_tints([("waterlily", tint)])
+            .with_sources(
+                [("waterlily".into(), json!({"textures":{"path":"textures/blocks/waterlily", "tint_color":format!("#{:02x}{:02x}{:02x}", tint[0], tint[1], tint[2])}}))],
+                [(1, None), (2, copied_tint)].map(|(id, baked_tint)| (id, MaterialTextureSource {
+                    key: "waterlily".into(),
+                    variant: 0,
+                    path: "textures/blocks/waterlily".into(),
+                    raster: "textures/blocks/waterlily.png".into(),
+                    baked_tint,
+                })),
+                [],
+            );
+        let keys = MaterialKeys::from_json(
+            &keys.to_json(base.materials().len() as u32),
+            base.materials().len(),
+        )
+        .unwrap();
+        let compiled = super::super::compile_block_overlay(
+            &view(),
+            &blocks,
+            false,
+            Some(&keys),
+            assets::MAX_TEXTURE_LAYERS as u32,
+            Some(&base),
+        )
+        .unwrap();
+        let matched = copied_tint == Some(tint);
+        let expected_kind = if matched {
+            VisualKind::Cube
+        } else {
+            VisualKind::Diagnostic
+        };
+        assert_eq!(compiled.overlay.visuals[0].kind, expected_kind);
+        assert_eq!(compiled.gaps.missing_textures, u32::from(!matched));
+        assert_eq!(compiled.overlay.texture.as_ref().unwrap().layers, 1);
+        assert!(compiled.overlay.material_overrides.is_empty());
+        let session = base.with_block_overlay(1, &compiled.overlay).unwrap();
+        let block = session.resolve(NetworkIdMode::Sequential, 1);
+        assert_eq!(block.kind(), expected_kind);
+        if matched {
+            assert_eq!(
+                session
+                    .material(block.face(BlockFace::Up).material_id())
+                    .texture,
+                base.material(2).texture
+            );
+        }
+        assert_eq!(session.material(1), base.material(1));
+        assert_eq!(session.material(2), base.material(2));
+    }
+}

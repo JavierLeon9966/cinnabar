@@ -74,14 +74,17 @@ impl<'a> VanillaFallback<'a> {
     }
 
     /// Returns the static variant-zero base reference for `key`, or `None`
-    /// when that destination has no eligible material.
+    /// when no donor has the requested tint already baked into its pixels.
     #[must_use]
-    pub fn texture(&self, key: &str) -> Option<TextureRef> {
-        let &id = self
-            .keys
-            .materials(key)
-            .iter()
-            .find(|&&id| self.keys.flipbook_selector(id) == (0, 0))?;
+    pub fn texture(&self, key: &str, tint: Option<[u8; 3]>) -> Option<TextureRef> {
+        let &id = self.keys.materials(key).iter().find(|&&id| {
+            self.keys.flipbook_selector(id) == (0, 0)
+                && self
+                    .keys
+                    .material_source(id)
+                    .and_then(|source| source.baked_tint)
+                    == tint
+        })?;
         if id == crate::DIAGNOSTIC_MATERIAL {
             return None;
         }
@@ -850,14 +853,14 @@ mod tests {
             },
         ];
         let fallback = VanillaFallback::new(&keys, &materials);
-        let reference = fallback.texture("oak_planks").expect("base oak");
+        let reference = fallback.texture("oak_planks", None).expect("base oak");
         assert_eq!((reference.page(), reference.layer()), (0, 0));
-        assert!(fallback.texture("water").is_none());
-        assert!(fallback.texture("missing").is_none());
+        assert!(fallback.texture("water", None).is_none());
+        assert!(fallback.texture("missing", None).is_none());
         let diagnostic = MaterialKeys::from_entries([(0, "oak_planks")]);
         assert!(
             VanillaFallback::new(&diagnostic, &materials)
-                .texture("oak_planks")
+                .texture("oak_planks", None)
                 .is_none()
         );
     }
@@ -883,7 +886,10 @@ mod tests {
                 MaterialKeys::from_json(&keys.to_json(materials.len() as u32), materials.len())
                     .unwrap();
             let fallback = VanillaFallback::new(&keys, &materials);
-            assert_eq!(fallback.texture("farmland"), Some(materials[2].texture));
+            assert_eq!(
+                fallback.texture("farmland", None),
+                Some(materials[2].texture)
+            );
         }
     }
 
@@ -908,7 +914,7 @@ mod tests {
             let materials = [Material::unvaried(), Material::unvaried(), variant_zero];
             assert!(
                 VanillaFallback::new(&keys, &materials)
-                    .texture("farmland")
+                    .texture("farmland", None)
                     .is_none()
             );
         }
@@ -916,7 +922,7 @@ mod tests {
             MaterialKeys::from_entries([(1, "farmland")]).with_flipbook_selectors([(1, (1, 0))]);
         assert!(
             VanillaFallback::new(&keys, &[Material::unvaried(); 2])
-                .texture("farmland")
+                .texture("farmland", None)
                 .is_none()
         );
     }
@@ -957,3 +963,6 @@ mod tests {
         assert!(base.with_block_overlay(1, &overlay).is_err());
     }
 }
+
+#[cfg(test)]
+mod fallback_tests;
