@@ -79,6 +79,9 @@ pub(crate) struct CarriedBlock {
 
 /// Returns visuals for the admitted custom prefix in palette or hashed-state order.
 /// Rejected runs stay unbacked; vanilla overrides may produce an overlay without custom blocks.
+/// `base_assets` supplies the base carrier so faces naming
+/// vanilla textures the server stack does not ship can reuse the base page
+/// instead of degrading; server rasters still win whenever they decode.
 pub(super) fn compile_block_overlay(
     view: &LayeredPackView,
     blocks: &CustomBlocks,
@@ -119,6 +122,9 @@ pub(super) fn compile_block_overlay(
             max_page_layers: max_layers as u32,
             ..BlockOverlay::default()
         },
+        fallback: vanilla_keys
+            .zip(base_assets)
+            .map(|(keys, base)| assets::VanillaFallback::new(keys, base.materials())),
         sources: Vec::new(),
         source_bytes: 0,
         tiles: Vec::new(),
@@ -206,7 +212,7 @@ enum Source {
 
 #[derive(Clone)]
 struct TextureSlot {
-    /// Overlay page one holds the first shard; large palettes spill into more.
+    /// Page zero borrows the carrier; higher pages address overlay shards.
     page: u32,
     layer: u32,
     animation: u32,
@@ -243,6 +249,8 @@ struct Builder<'a> {
     terrain_materials: HashMap<(String, u32, u32), u32>,
     geometries: HashMap<String, Geometry>,
     overlay: BlockOverlay,
+    /// Base-carrier textures for vanilla keys the server stack does not ship.
+    fallback: Option<assets::VanillaFallback<'a>>,
     /// Flat sources tagged with their shard; shards group equal-scale layers
     /// so one physical tile serves each page without inflating small art.
     sources: Vec<(Source, usize)>,
@@ -524,12 +532,31 @@ impl Builder<'_> {
         (material, alpha_flags, two_sided)
     }
 
-    /// Resolves the default state and choice for a custom block material.
+    /// Resolves a custom block's default choice, borrowing only unchanged base routes.
     fn texture_slot(&mut self, key: &str) -> Option<TextureSlot> {
-        self.route_slot(TextureRoute::Catalog {
+        let route = TextureRoute::Catalog {
             key: key.to_owned(),
             variant: 0,
             choice: 0,
+        };
+        self.route_slot(route.clone()).or_else(|| {
+            // A changed catalog can name different pixels, tint, or UV sampling.
+            if self.catalog.redefined(key, 0) {
+                return None;
+            }
+            let storage_key = self.catalog.storage_key(&route, None)?;
+            if !matches!(
+                self.slots.frames(&storage_key, false),
+                Some(Err(texture_admission::FrameFailure::Missing))
+            ) {
+                return None;
+            }
+            let reference = self.fallback.as_ref()?.texture(key, storage_key.tint)?;
+            Some(TextureSlot {
+                page: reference.page(),
+                layer: reference.layer(),
+                animation: NO_ANIMATION,
+            })
         })
     }
 
@@ -590,6 +617,9 @@ impl Builder<'_> {
             .map(|(_, shard)| *shard)
             .max()
             .map_or(0, |last| last + 1);
+        if shards > MAX_OVERLAY_SHARDS || self.sources.len() > MAX_OVERLAY_LAYERS {
+            return None;
+        }
         let mut tiles = Vec::with_capacity(shards);
         let mut total = 0usize;
         for shard in 0..shards {
@@ -611,6 +641,9 @@ impl Builder<'_> {
                 .iter()
                 .filter(|(_, assigned)| *assigned == shard)
                 .count();
+            if layers == 0 || layers > self.max_layers {
+                return None;
+            }
             total = total.checked_add(self.texture_policy.terrain_bytes(tile, layers)?)?;
             if total > assets::texture::policy::MAX_SUBSCRIBER_BYTES {
                 return None;
@@ -642,8 +675,10 @@ impl Builder<'_> {
                 } else {
                     0
                 };
-                let (dimensions, chain, grid) = if dimensions.iter().any(|&size| size >> grid == 0)
-                {
+                let (dimensions, chain, grid) = if dimensions.iter().any(|&size| {
+                    size.checked_shr(u32::from(grid))
+                        .is_none_or(|size| size == 0)
+                }) {
                     self.gaps.missing_textures = self.gaps.missing_textures.saturating_add(1);
                     (
                         [tile as u16; 2],

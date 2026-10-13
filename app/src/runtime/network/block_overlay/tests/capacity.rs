@@ -130,14 +130,30 @@ fn larger_overlays_keep_every_texture_that_fits_the_device() {
 }
 
 #[test]
-fn flipbooks_use_only_the_device_layers_remaining_after_the_diagnostic() {
+fn flipbooks_respect_device_layer_limits_across_shards() {
     let blocks = CustomBlocks {
         blocks: vec![generator()].into(),
         ..Default::default()
     };
     for limit in [1, 2, 3] {
         let compiled = compile_block_overlay(&view(), &blocks, false, None, limit, None).unwrap();
-        assert_eq!(compiled.overlay.textures.first().unwrap().layers, limit);
+        assert_eq!(
+            compiled
+                .overlay
+                .textures
+                .iter()
+                .map(|shard| shard.layers)
+                .sum::<u32>(),
+            3
+        );
+        assert!(
+            compiled
+                .overlay
+                .textures
+                .iter()
+                .all(|shard| shard.layers <= limit)
+        );
+        assert_eq!(compiled.overlay.animations[0].frame_count, 2);
         assert!(
             compiled
                 .overlay

@@ -8373,6 +8373,33 @@ separates this encoding from version 18. Chunk, model and liquid shaders bind
 all supported pages, with diagnostic textures for unused slots. Shared frame
 caches and transactional terrain bindings retain each run's page and restore
 shard costs when a route is rolled back. Runtime pages own each shard once.
+Complete frame runs stay together when they fit; otherwise frames span shards
+in timeline order before truncating at layer or byte limits. Placement compares
+actual growth costs, and each layer's source dimensions and UV grid validate
+against its owning shard.
 
-Incomplete: CI compilation, regression tests, the updated world-carrier golden
-digest, and rendered-frame validation. This does not close a parity gate.
+Incomplete: CI compilation, regression tests, and rendered-frame validation.
+This does not close a parity gate.
+
+
+## Overlay vanilla-texture fallback
+
+Implemented: custom blocks naming vanilla textures absent from the server
+stack can borrow a static page-0 texture from the matching base carrier.
+The resolver uses the retained atlas and UV indices to select variant zero,
+independent of material ID order. Donors must have the catalog's requested
+tint already baked into their pixels; missing or different tints decline
+fallback. Server material flags remain overlay-local,
+and borrowing consumes no texture layer or byte budget. Server rasters take
+precedence when they decode; capacity and budget refusals remain refusals.
+Borrowed layers are validated against the base page, and vanilla material
+overrides continue to require overlay textures. Changed catalog routes whose
+pack pixels cannot be decoded stay diagnostic for custom blocks; they never
+borrow the original key's artwork.
+
+Regression coverage includes sidecar roundtrips with reversed variant order,
+missing or ineligible variant-zero materials, custom-block publication,
+server-raster precedence, diagnostic fallback, and admission refusals. Live
+visual verification remains pending. Block-item sheets and inventory icons
+still use placeholders for borrowed faces, and animated vanilla art remains
+limited to base blocks.
