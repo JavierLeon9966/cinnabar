@@ -259,7 +259,7 @@ fn asset_revision_replacement_is_atomic_and_retains_the_previous_prepared_set_on
         "a rejected new revision must retain the previous complete GPU asset set"
     );
     let uploads = prepare
-        .find("for (index, (texture, plans)) in bound_pages.iter().zip(upload_plans)")
+        .find("for (index, (texture, plans)) in terrain_pages.iter().zip(upload_plans)")
         .expect("every page uploads before publication");
     let publish = prepare
         .find("_textures: textures.try_into()")
