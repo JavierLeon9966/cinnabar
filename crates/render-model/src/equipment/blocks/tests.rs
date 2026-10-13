@@ -48,6 +48,53 @@ fn overlay(flags: BlockFlags, material_flags: u32, size: u32) -> BlockOverlay {
 }
 
 #[test]
+fn carried_face_sheets_sample_every_overlay_shard() {
+    let mut source = overlay(BlockFlags::CUBE_GEOMETRY, 0, 16);
+    for page in 2..assets::MAX_TEXTURE_PAGES as u32 {
+        let color = [40, page as u8, 120, 128];
+        let mut shard = overlay(BlockFlags::CUBE_GEOMETRY, 0, 32)
+            .textures
+            .into_iter()
+            .next()
+            .unwrap();
+        for mip in &mut shard.mips {
+            for pixel in mip.rgba8.as_chunks_mut::<4>().0 {
+                pixel.copy_from_slice(&color);
+            }
+        }
+        source.textures.push(shard);
+        source.materials[1].texture = TextureRef::new(page, 1).unwrap();
+        let faces = overlay_face_sheet(&source, [1; 6])
+            .expect("a carried face may reference any available overlay shard");
+        let visual = overlay_sheet(&source, 0).unwrap();
+        assert_eq!(faces.rgba8, visual.rgba8);
+        assert_eq!([faces.width, faces.height], assets::BLOCK_ITEM_SHEET_SIZE);
+        assert!(
+            faces
+                .rgba8
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .all(|pixel| *pixel == color)
+        );
+    }
+}
+
+#[test]
+fn carried_face_sheets_reject_diagnostic_and_unavailable_overlay_references() {
+    let mut source = overlay(BlockFlags::CUBE_GEOMETRY, 0, 16);
+    assert!(overlay_face_sheet(&source, [DIAGNOSTIC_MATERIAL; 6]).is_none());
+    for reference in [
+        TextureRef::new(0, 1).unwrap(),
+        TextureRef::new(2, 1).unwrap(),
+        TextureRef::new(1, source.textures[0].layers).unwrap(),
+    ] {
+        source.materials[1].texture = reference;
+        assert!(overlay_face_sheet(&source, [1; 6]).is_none());
+    }
+}
+
+#[test]
 fn cube_sheets_ignore_gameplay_flags_and_terrain_occlusion() {
     for flags in [
         BlockFlags::CUBE_GEOMETRY | BlockFlags::OCCLUDES_FULL_FACE | BlockFlags::FIRE_FLAMMABLE,

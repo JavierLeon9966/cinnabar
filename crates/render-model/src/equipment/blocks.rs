@@ -263,11 +263,10 @@ pub fn overlay_sheet(overlay: &BlockOverlay, visual: usize) -> Option<IconSprite
 pub fn overlay_face_sheet(overlay: &BlockOverlay, faces: [u32; 6]) -> Option<IconSprite> {
     let mut tiles = Vec::with_capacity(BlockFace::ALL.len());
     for id in faces {
-        // Overlay materials address the overlay's own array as page 1.
         let material = overlay
             .materials
             .get(id as usize)
-            .filter(|material| id != DIAGNOSTIC_MATERIAL && material.texture.page() == 1)?;
+            .filter(|_| id != DIAGNOSTIC_MATERIAL)?;
         tiles.push(overlay_face_tile(overlay, material)?);
     }
     compose_block_item_sheet(&tiles.try_into().ok()?)
