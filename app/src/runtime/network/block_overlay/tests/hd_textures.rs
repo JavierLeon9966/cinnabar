@@ -108,7 +108,7 @@ fn mixed_terrain_keeps_hd_dimensions_and_adjacent_detail_pixels() {
         let layer = reference.layer() as usize;
         assert_eq!(
             compiled.overlay.textures[shard].mips[0].size,
-            width.max(height) as u32,
+            width.max(height),
             "each scale keeps its own tile"
         );
         assert_eq!(
