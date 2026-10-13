@@ -389,7 +389,9 @@ impl Builder<'_> {
             .iter()
             .filter(|cube| !hidden_bones.iter().any(|bone| **bone == *cube.bone))
             .collect::<Vec<_>>();
-        if shown.is_empty() && !geometry.cubes.is_empty() {
+        // A geometry with no cubes draws nothing: pack-authored null markers
+        // pair cubeless geometry with a null texture to hide a state.
+        if shown.is_empty() {
             return invisible_visual();
         }
         for cube in shown {

@@ -8414,3 +8414,15 @@ server-raster precedence, diagnostic fallback, and admission refusals. Live
 visual verification remains pending. Block-item sheets and inventory icons
 still use placeholders for borrowed faces, and animated vanilla art remains
 limited to base blocks.
+
+## Cubeless server geometry draws nothing
+
+Server packs pair a cubeless geometry with a null texture to hide a block
+state (furniture anchors, empty vessels). The overlay compiler previously
+degraded those states to the diagnostic look; a geometry with no cubes now
+compiles to the invisible visual with no gap counted, matching the native
+empty render. The bone-visibility path is unchanged: fully hidden bones
+already returned invisible. A regression covers an identifier-only geometry
+in both hashed and palette sessions, asserting the invisible kind, clean
+gaps, and session application. The test fails on the previous
+implementation, which returned diagnostic.
