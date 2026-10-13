@@ -8412,6 +8412,7 @@ Borrowed layers are validated against the base page, and vanilla material
 overrides continue to require overlay textures. Changed catalog routes whose
 pack pixels cannot be decoded stay diagnostic for custom blocks; they never
 borrow the original key's artwork.
+
 Regression coverage includes sidecar roundtrips with reversed variant order,
 missing or ineligible variant-zero materials, custom-block publication,
 server-raster precedence, diagnostic fallback, and admission refusals. Live
@@ -8437,6 +8438,11 @@ both fail on the previous implementation. Existing suites updated to the
 new kind expectations with unchanged gap totals. Block-item sheets still
 fall back to placeholders for diagnostic faces; inventory 3D icons raster
 the surviving mesh with diagnostic quads.
+
+Failed model faces preserve the selected material's two-sided flag even
+when a texture is missing or the material budget is full. Regression
+coverage checks render methods, rotated and axis-aligned quads, and session
+application.
 
 ## Cubeless server geometry draws nothing
 

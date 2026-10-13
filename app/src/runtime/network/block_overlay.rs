@@ -468,6 +468,7 @@ impl Builder<'_> {
 
     /// Resolves a face's material instance: an explicit geometry name, then the
     /// face, then `side` for horizontal faces, then `*`.
+    /// Diagnostic fallback keeps the selected instance's sidedness.
     fn face_material(
         &mut self,
         components: &CustomVisualComponents,
@@ -529,10 +530,10 @@ impl Builder<'_> {
             return (material, alpha_flags, two_sided);
         }
         if !self.can_admit_materials(1) {
-            return (DIAGNOSTIC_MATERIAL, 0, false);
+            return (DIAGNOSTIC_MATERIAL, 0, two_sided);
         }
         let Some(slot) = self.texture_slot(&texture) else {
-            return (DIAGNOSTIC_MATERIAL, 0, false);
+            return (DIAGNOSTIC_MATERIAL, 0, two_sided);
         };
         let material = self.overlay.materials.len() as u32;
         self.overlay.materials.push(Material {
