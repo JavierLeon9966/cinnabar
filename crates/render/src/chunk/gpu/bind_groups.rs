@@ -539,7 +539,8 @@ fn build_chunk_texture_assets(
     let mut uploaded_bytes = 0u64;
     let mut textures = Vec::with_capacity(assets::MAX_TEXTURE_PAGES);
     let mut views = Vec::with_capacity(assets::MAX_TEXTURE_PAGES);
-    for (index, (texture, plans)) in bound_pages.iter().zip(upload_plans).enumerate() {
+    // Upload the mip-rebuilt pages the validator measured, not the raw sources.
+    for (index, (texture, plans)) in terrain_pages.iter().zip(upload_plans).enumerate() {
         let (texture, view, uploaded) = upload_texture_page(
             render_device,
             render_queue,
