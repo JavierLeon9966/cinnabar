@@ -55,7 +55,7 @@ fn default_player_skin(
 pub(crate) fn install_world_sidecars(assets: &mut LoadedAssets) {
     if let Some(keys) = assets.material_keys.take() {
         pack_runtime::pack_textures::set_base_terrain_catalog(keys.aliases());
-        crate::runtime::network::set_base_material_keys(keys);
+        crate::runtime::network::set_base_material_keys(keys, assets.runtime.materials());
     }
     if let Some(refs) = assets.vanilla_entity_refs.take() {
         pack_runtime::entity_pack::set_vanilla_refs(refs);

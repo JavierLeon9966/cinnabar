@@ -313,6 +313,7 @@ fn compile_application(
                                 custom_blocks,
                                 hashed_block_ids,
                                 BASE_MATERIAL_KEYS.get(),
+                                BASE_MATERIALS.get().map(Vec::as_slice),
                                 max_layers,
                             )
                             .map(Arc::new)
@@ -538,8 +539,14 @@ pub(super) fn overlay_texture_layer_limit() -> u32 {
 /// Texture keys of the vanilla carrier's materials, set once at startup when the sidecar loads.
 static BASE_MATERIAL_KEYS: std::sync::OnceLock<assets::MaterialKeys> = std::sync::OnceLock::new();
 
-pub(crate) fn set_base_material_keys(keys: assets::MaterialKeys) {
+/// Snapshot of the vanilla carrier's material table, parallel to the keys
+/// above, so overlay compiles can borrow base page references for vanilla
+/// textures the server stack does not ship.
+static BASE_MATERIALS: std::sync::OnceLock<Vec<assets::Material>> = std::sync::OnceLock::new();
+
+pub(crate) fn set_base_material_keys(keys: assets::MaterialKeys, materials: &[assets::Material]) {
     let _ = BASE_MATERIAL_KEYS.set(keys);
+    let _ = BASE_MATERIALS.set(materials.to_vec());
 }
 
 use pack_runtime::pack_language::merged_server_lang;

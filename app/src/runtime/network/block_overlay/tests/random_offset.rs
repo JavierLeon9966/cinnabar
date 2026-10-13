@@ -82,6 +82,7 @@ fn random_offset_state_authority_drives_mesh_and_overlay_geometry_in_both_id_spa
 fn terrain_override_mips_average_unassociated_leaf_alpha_and_colours() {
     let view = view();
     let mut builder = super::super::Builder {
+        fallback: None,
         catalog: super::super::textures::TextureCatalog::new(&view, None),
         geometries: Default::default(),
         overlay: Default::default(),
@@ -244,6 +245,7 @@ fn overlay_images(
         catalog: super::super::textures::TextureCatalog::new(&view, None),
         geometries: Default::default(),
         overlay: Default::default(),
+        fallback: None,
         sources: images
             .into_iter()
             .map(super::super::Source::Image)
@@ -437,6 +439,7 @@ fn terrain_override_subtile_images_use_the_minimum_atlas_pixel_size() {
 fn terrain_page_rejects_over_budget_sources_without_shrinking() {
     let view = view();
     let mut builder = super::super::Builder {
+        fallback: None,
         catalog: super::super::textures::TextureCatalog::new(&view, None),
         geometries: Default::default(),
         overlay: Default::default(),

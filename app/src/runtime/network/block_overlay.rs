@@ -63,11 +63,15 @@ pub(crate) struct CompiledBlockOverlay {
 
 /// Returns visuals for the admitted custom prefix in palette or hashed-state order.
 /// Rejected runs stay unbacked; vanilla overrides may produce an overlay without custom blocks.
+/// `base_materials` borrows the base carrier's material table so faces naming
+/// vanilla textures the server stack does not ship can reuse the base page
+/// instead of degrading; server rasters still win whenever they decode.
 pub(super) fn compile_block_overlay(
     view: &LayeredPackView,
     blocks: &CustomBlocks,
     hashed: bool,
     vanilla_keys: Option<&MaterialKeys>,
+    base_materials: Option<&[Material]>,
     max_texture_array_layers: u32,
 ) -> Option<CompiledBlockOverlay> {
     if max_texture_array_layers == 0 {
@@ -93,6 +97,9 @@ pub(super) fn compile_block_overlay(
         catalog: TextureCatalog::new(view, vanilla_keys),
         geometries: geometry_catalog(view, &wanted),
         overlay: BlockOverlay::default(),
+        fallback: vanilla_keys
+            .zip(base_materials)
+            .map(|(keys, materials)| assets::VanillaFallback::new(keys, materials)),
         sources: Vec::new(),
         source_bytes: 0,
         tile_size: MIN_TILE,
@@ -174,6 +181,7 @@ enum Source {
 
 #[derive(Clone)]
 struct TextureSlot {
+    page: u32,
     layer: u32,
     animation: u32,
 }
@@ -182,6 +190,8 @@ struct Builder<'a> {
     catalog: TextureCatalog<'a>,
     geometries: HashMap<String, Geometry>,
     overlay: BlockOverlay,
+    /// Base-carrier textures for vanilla keys the server stack does not ship.
+    fallback: Option<assets::VanillaFallback<'a>>,
     sources: Vec<Source>,
     source_bytes: usize,
     tile_size: u32,
@@ -208,11 +218,16 @@ impl Builder<'_> {
             let Some(slot) = self.texture_slot(&key) else {
                 continue;
             };
+            // Only server rasters repoint base materials; a vanilla fallback
+            // already lives on the base page and repointing would retarget it.
+            if slot.page != 1 {
+                continue;
+            }
             for &material in keys.materials(&key) {
                 if material != DIAGNOSTIC_MATERIAL && claimed.insert(material) {
                     self.overlay.material_overrides.push(MaterialOverride {
                         material,
-                        texture: TextureRef::new(1, slot.layer).expect("bounded layer"),
+                        texture: TextureRef::new(slot.page, slot.layer).expect("bounded layer"),
                         animation: slot.animation,
                     });
                 }
@@ -465,7 +480,7 @@ impl Builder<'_> {
         };
         let material = self.overlay.materials.len() as u32;
         self.overlay.materials.push(Material {
-            texture: TextureRef::new(1, slot.layer).expect("bounded layer"),
+            texture: TextureRef::new(slot.page, slot.layer).expect("bounded layer"),
             flags,
             animation: slot.animation,
             ..assets::Material::unvaried()
@@ -492,7 +507,21 @@ impl Builder<'_> {
             self.catalog.report_full(key);
             return None;
         }
-        let mut texture = self.catalog.decode(key)?;
+        let Some(mut texture) = self.catalog.decode(key) else {
+            // The server names vanilla art it does not ship: reuse the base
+            // page instead of sinking the visual. Saturated and budgeted
+            // routes never reach here, so their refusals keep their meaning.
+            if let Some(fallback) = &self.fallback
+                && let Some(reference) = fallback.texture(key)
+            {
+                return Some(TextureSlot {
+                    page: reference.page(),
+                    layer: reference.layer(),
+                    animation: NO_ANIMATION,
+                });
+            }
+            return None;
+        };
         let grid = self.catalog.grid(key);
         if self.catalog.flipbook(key).is_none() {
             admit_static_rectangle(&mut texture);
@@ -575,6 +604,7 @@ impl Builder<'_> {
             _ => NO_ANIMATION,
         };
         Some(TextureSlot {
+            page: 1,
             layer: first,
             animation,
         })

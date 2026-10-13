@@ -539,7 +539,7 @@ fn reapplied_stack_reuses_blocks_identical_to_a_fresh_compile() {
     };
     let fresh = |stack: &Arc<resource_pack::ValidatedPackStack>| {
         let view = resource_pack::LayeredPackView::tracked(stack.clone());
-        super::compile_block_overlay(&view, &blocks, false, Some(&keys), limit)
+        super::compile_block_overlay(&view, &blocks, false, Some(&keys), None, limit)
     };
     let mut compiles = 0;
     let mut cached = |stack: &Arc<resource_pack::ValidatedPackStack>| {
@@ -552,7 +552,7 @@ fn reapplied_stack_reuses_blocks_identical_to_a_fresh_compile() {
             limit,
             || {
                 compiles += 1;
-                super::compile_block_overlay(&view, &blocks, false, Some(&keys), limit)
+                super::compile_block_overlay(&view, &blocks, false, Some(&keys), None, limit)
                     .map(Arc::new)
             },
         )

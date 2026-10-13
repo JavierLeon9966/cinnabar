@@ -259,6 +259,7 @@ fn join_part_timing() {
             &Default::default(),
             false,
             BASE_MATERIAL_KEYS.get(),
+            BASE_MATERIALS.get().map(Vec::as_slice),
             overlay_texture_layer_limit(),
         );
     });
