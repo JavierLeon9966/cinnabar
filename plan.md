@@ -550,7 +550,12 @@ these changes do not close the movement, camera, or actor parity gates.
 - Actor crouch updates preserve held ability-flight descent during live input
   and correction replay; older walking-pose updates stop at the flight transition.
   Focused regressions reproduce the upward rewind caused by a server sneak clear.
-  Native-server candidate input and rendered acceptance remain incomplete.
+  Scoped native-server descent, release, landing and flight-toggle acceptance passed.
+- Provisional streaming-boundary handling keeps ability-flight ticks advancing
+  beside entirely absent columns, using solid collision barriers with retained
+  absence identities and replay snapshots. Missing sections in partially received
+  columns still wait for authoritative data. Streaming-boundary server, input and
+  rendered acceptance remain incomplete; this does not close creative-flight parity.
 - Validation: 267 simulator tests, 69 semantic-input tests, 345 movement tests
   and 16 focused client tests pass. The touched-crate compile check includes
   tests and the client app. The architecture check passes. Regression tests
@@ -8432,3 +8437,13 @@ both fail on the previous implementation. Existing suites updated to the
 new kind expectations with unchanged gap totals. Block-item sheets still
 fall back to placeholders for diagnostic faces; inventory 3D icons raster
 the surviving mesh with diagnostic quads.
+
+## Cubeless server geometry draws nothing
+
+Server packs pair a cubeless geometry with a null texture to hide a block
+state (furniture anchors, empty vessels). The overlay compiler renders
+cubeless geometry invisible with no gap counted. Geometry emptied by
+rejected cubes keeps the diagnostic visual and its skipped-cube count.
+Fully hidden valid cubes still return invisible, even if another cube was
+rejected. Regressions cover all three cases in hashed and palette sessions,
+including visual support, gap counts, and session application.
