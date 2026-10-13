@@ -101,7 +101,8 @@ pub(super) fn compile_block_overlay(
         },
         sources: Vec::new(),
         source_bytes: 0,
-        tile_size: MIN_TILE,
+        tiles: Vec::new(),
+        upload_bytes: 0,
         texture_policy: device_policy(),
         max_layers,
         textures: HashMap::new(),
@@ -112,7 +113,7 @@ pub(super) fn compile_block_overlay(
             ..OverlayGaps::default()
         },
     };
-    builder.sources.push(Source::Diagnostic);
+    builder.sources.push((Source::Diagnostic, 0));
     builder.overlay.materials.push(Material {
         texture: TextureRef::new(1, 0).expect("layer zero"),
         flags: 0,
@@ -190,9 +191,14 @@ struct Builder<'a> {
     catalog: TextureCatalog<'a>,
     geometries: HashMap<String, Geometry>,
     overlay: BlockOverlay,
-    sources: Vec<Source>,
+    /// Flat sources tagged with their shard; shards group equal-scale layers
+    /// so one physical tile serves each page without inflating small art.
+    sources: Vec<(Source, usize)>,
     source_bytes: usize,
-    tile_size: u32,
+    /// Current physical tile per open shard, bounding admitted layer bytes.
+    tiles: Vec<u32>,
+    /// Estimated upload bytes across shards, kept under the shared budget.
+    upload_bytes: usize,
     texture_policy: TexturePolicy,
     max_layers: usize,
     textures: HashMap<String, Option<TextureSlot>>,
@@ -495,21 +501,16 @@ impl Builder<'_> {
     /// Layers are budgeted per shard while bytes stay global, so a palette
     /// larger than one device array splits into pages without changing the
     /// memory policy. The first shard also carries the diagnostic layer.
+    /// Admits one texture into the best-fit shard: the smallest tile that
+    /// fits it with layer room, else a fresh shard, else a budgeted ratchet.
+    /// Layer counts stay within the device per-array limit while upload bytes
+    /// stay under the shared budget; refusals name budget or saturation.
     fn load_texture(&mut self, key: &str) -> Option<TextureSlot> {
         if self.max_layers == 0 {
             self.gaps.saturated_textures += 1;
             self.catalog.report_full(key);
             return None;
         }
-        let shard = self.sources.len() / self.max_layers;
-        if shard >= MAX_OVERLAY_SHARDS {
-            // Every shard is full, so name the refused route rather than
-            // leaving it indistinguishable from unusable pack data.
-            self.gaps.saturated_textures += 1;
-            self.catalog.report_full(key);
-            return None;
-        }
-        let available = self.max_layers - self.sources.len() % self.max_layers;
         let mut texture = self.catalog.decode(key)?;
         let grid = self.catalog.grid(key);
         if self.catalog.flipbook(key).is_none() {
@@ -521,26 +522,90 @@ impl Builder<'_> {
             } else {
                 texture.height
             };
-        let tile = texture
+        let own = texture
             .width
             .max(frame_height)
             .checked_next_power_of_two()?
-            .max(self.tile_size);
-        let Some(layer_bytes) = self.texture_policy.terrain_bytes(tile, 1) else {
-            self.catalog.report_budget(key);
-            return None;
-        };
+            .max(MIN_TILE);
         let frame_bytes = self
             .texture_policy
             .source_bytes(texture.width, frame_height, false)?;
-        let available = available
-            .min((MAX_SUBSCRIBER_BYTES / layer_bytes).saturating_sub(self.sources.len()))
-            .min(MAX_SUBSCRIBER_BYTES.saturating_sub(self.source_bytes) / frame_bytes);
+        // Best fit keeps small art at small tiles: the first page whose
+        // tile already fits with layer room, else a fresh page, else a
+        // budgeted ratchet of the cheapest roomy page. Nothing mutates until
+        // the byte budget below admits the run.
+        let mut selected: Option<(usize, u32, bool)> = None;
+        for (index, tile) in self.tiles.iter().enumerate() {
+            if *tile >= own && self.shard_len(index) < self.max_layers {
+                selected = Some((index, *tile, false));
+                break;
+            }
+        }
+        if selected.is_none() {
+            if self.tiles.len() < MAX_OVERLAY_SHARDS {
+                selected = Some((self.tiles.len(), own, false));
+            } else {
+                // Every page is open; growing the cheapest roomy one stays
+                // closest to admitted scales instead of refusing outright.
+                let mut best: Option<(usize, u32)> = None;
+                for index in 0..self.tiles.len() {
+                    if self.shard_len(index) >= self.max_layers {
+                        continue;
+                    }
+                    let grown = self.tiles[index].max(own);
+                    if best.is_none_or(|(_, known)| grown < known) {
+                        best = Some((index, grown));
+                    }
+                }
+                if let Some((index, grown)) = best {
+                    selected = Some((index, grown, true));
+                }
+            }
+        }
+        let Some((shard, tile, ratchet)) = selected else {
+            // No layer room anywhere: the arrays, not the bytes, bind.
+            self.gaps.saturated_textures += 1;
+            self.catalog.report_full(key);
+            return None;
+        };
+        let room = self.max_layers - self.shard_len(shard);
+        let layer_bytes = self
+            .texture_policy
+            .terrain_bytes(tile, 1)
+            .unwrap_or(usize::MAX);
+        // A ratchet re-costs the page's existing layers at the grown tile.
+        let recost = if ratchet {
+            let before = self.shard_len(shard);
+            let old_cost = self
+                .texture_policy
+                .terrain_bytes(self.tiles[shard], before)
+                .unwrap_or(usize::MAX);
+            let new_cost = self
+                .texture_policy
+                .terrain_bytes(tile, before + room.min(256))
+                .unwrap_or(usize::MAX);
+            new_cost.saturating_sub(old_cost.min(new_cost))
+        } else {
+            0
+        };
+        let available = room
+            .min(
+                (MAX_SUBSCRIBER_BYTES / layer_bytes.max(1))
+                    .saturating_sub(self.shard_len(shard)),
+            )
+            .min(
+                MAX_SUBSCRIBER_BYTES
+                    .saturating_sub(self.upload_bytes)
+                    .saturating_sub(recost)
+                    / layer_bytes.max(1),
+            )
+            .min(MAX_SUBSCRIBER_BYTES.saturating_sub(self.source_bytes) / frame_bytes.max(1));
         if available == 0 {
             self.catalog.report_budget(key);
             return None;
         }
-        // Bound full-resolution frame copies before allocating them.
+        // Bound full-resolution frame copies before allocating them; frames
+        // were capped at the shard remainder, so a run never crosses pages.
         let frames = match self.catalog.flipbook(key) {
             Some(flipbook) => flipbook_frames(
                 &texture,
@@ -560,27 +625,54 @@ impl Builder<'_> {
         if frames.is_empty() || self.source_bytes + added_bytes > MAX_SUBSCRIBER_BYTES {
             return None;
         }
-        self.tile_size = tile;
-        self.source_bytes += added_bytes;
-        let first = self.sources.len() as u32;
+        let layer = self.shard_len(shard) as u32;
         let frame_count = frames.len() as u32;
         // Frames were capped at the shard remainder, so this run never
         // crosses the page `finish` cuts at the same stride.
-        let page = first / self.max_layers as u32 + 1;
-        self.sources.extend(frames.into_iter().map(|frame| {
-            if grid == 0 {
-                Source::Image(frame)
-            } else {
-                Source::GridImage(frame, grid)
+        let page = shard as u32 + 1;
+        self.source_bytes += added_bytes;
+        if ratchet {
+            // The gate held room for the estimate; account the actual run,
+            // which never exceeds it since costs grow with layer count.
+            let before = layer as usize;
+            let old_cost = self
+                .texture_policy
+                .terrain_bytes(self.tiles[shard], before)
+                .unwrap_or(usize::MAX);
+            let actual = self
+                .texture_policy
+                .terrain_bytes(tile, before + frames.len())
+                .unwrap_or(usize::MAX);
+            self.tiles[shard] = tile;
+            self.upload_bytes = self
+                .upload_bytes
+                .saturating_add(actual)
+                .saturating_sub(old_cost.min(actual));
+        } else {
+            if shard == self.tiles.len() {
+                self.tiles.push(tile);
             }
+            self.upload_bytes = self
+                .upload_bytes
+                .saturating_add(frames.len().saturating_mul(layer_bytes));
+        }
+        self.sources.extend(frames.into_iter().map(|frame| {
+            (
+                if grid == 0 {
+                    Source::Image(frame)
+                } else {
+                    Source::GridImage(frame, grid)
+                },
+                shard,
+            )
         }));
         let animation = match self.catalog.flipbook(key) {
             Some(flipbook) if frame_count > 1 => {
                 let frame_start = self.overlay.animation_frames.len() as u32;
-                for layer in (first % self.max_layers as u32)..(first % self.max_layers as u32 + frame_count) {
+                for offset in 0..frame_count {
                     self.overlay
                         .animation_frames
-                        .push(TextureRef::new(page, layer).expect("bounded layer"));
+                        .push(TextureRef::new(page, layer + offset).expect("bounded layer"));
                 }
                 self.overlay.animations.push(Animation {
                     frame_start,
@@ -597,104 +689,134 @@ impl Builder<'_> {
         };
         Some(TextureSlot {
             page,
-            layer: first % self.max_layers as u32,
+            layer,
             animation,
         })
     }
 
+    /// Layers currently assigned to one shard.
+    fn shard_len(&self, shard: usize) -> usize {
+        self.sources
+            .iter()
+            .filter(|(_, assigned)| *assigned == shard)
+            .count()
+    }
+
+    /// Upload budget left after the admitted pages.
+    fn upload_remaining(&self) -> usize {
+        MAX_SUBSCRIBER_BYTES.saturating_sub(self.upload_bytes)
+    }
+
     fn finish(mut self) -> Option<CompiledBlockOverlay> {
-        for source in &mut self.sources {
+        for (source, _) in &mut self.sources {
             if let Source::Image(texture) | Source::GridImage(texture, _) = source {
                 admit_static_rectangle(texture);
             }
         }
-        let largest = self
+        // Shards own contiguous runs of the tagged stream; directly pushed
+        // fixtures share shard zero. Each page takes the tile of its largest
+        // source so small art never subsidizes HD neighbours.
+        let shards = self
             .sources
             .iter()
-            .filter_map(|source| match source {
-                Source::Image(texture) | Source::GridImage(texture, _) => {
-                    Some(texture.width.max(texture.height))
-                }
-                Source::Diagnostic => None,
-            })
+            .map(|(_, shard)| *shard)
             .max()
-            .unwrap_or(MIN_TILE);
-        let tile = largest.checked_next_power_of_two()?.max(MIN_TILE);
-        self.texture_policy
-            .terrain_bytes(tile, self.sources.len())?;
-        let mut mips: Vec<Vec<u8>> = Vec::new();
-        for source in &self.sources {
-            let (dimensions, chain) = match source {
-                Source::Diagnostic => (
-                    [tile as u16; 2],
-                    assets::build_legacy_terrain_mip_chain(&diagnostic_pixels(tile), tile).ok()?,
-                ),
-                Source::Image(texture) | Source::GridImage(texture, _) => {
-                    source_mip_chain(texture, tile)?
-                }
-            };
-            let grid = if let Source::GridImage(_, grid) = source {
-                *grid
-            } else {
-                0
-            };
-            let (dimensions, chain, grid) = if dimensions.iter().any(|&size| size >> grid == 0) {
-                self.gaps.missing_textures = self.gaps.missing_textures.saturating_add(1);
-                (
-                    [tile as u16; 2],
-                    assets::build_legacy_terrain_mip_chain(&diagnostic_pixels(tile), tile).ok()?,
-                    0,
-                )
-            } else {
-                (dimensions.map(|size| size >> grid), chain, grid)
-            };
-            self.overlay.texture_source_sizes.push(dimensions);
-            self.overlay.texture_source_grids.push(grid);
-            mips.resize(chain.len(), Vec::new());
-            for (level, mip) in chain.iter().enumerate() {
-                mips[level].extend_from_slice(&mip.rgba8);
-            }
-        }
-        let mut size = tile;
-        let mips = mips
-            .into_iter()
-            .map(|rgba8| {
-                let mip = TextureMip {
-                    size,
-                    rgba8: rgba8.into_boxed_slice(),
-                };
-                size = (size / 2).max(1);
-                mip
-            })
-            .collect::<Vec<_>>();
-        // Cut the flat layer stream into per-page shards. One array-sized
-        // palette still yields exactly one shard, so this only splits when the
-        // device's array limit forced `load_texture` onto another page.
-        let shards = self.sources.len().div_ceil(self.max_layers).max(1);
-        let stride = self.max_layers;
+            .map_or(0, |last| last + 1);
+        eprintln!("FINISHDEBUG sources={} shards={}", self.sources.len(), shards);
+        let mut tiles = Vec::with_capacity(shards);
+        let mut total = 0usize;
         for shard in 0..shards {
-            let end = if shard + 1 == shards {
-                self.sources.len()
-            } else {
-                ((shard + 1) * stride).min(self.sources.len())
-            };
-            self.overlay.textures.push(TextureArray {
-                layers: (end - shard * stride) as u32,
-                mips: mips
-                    .iter()
-                    .map(|mip| {
-                        let layer_bytes = (mip.size * mip.size * 4) as usize;
-                        TextureMip {
-                            size: mip.size,
-                            rgba8: mip.rgba8[shard * stride * layer_bytes..end * layer_bytes]
-                                .to_vec()
-                                .into_boxed_slice(),
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .into_boxed_slice(),
+            let largest = self
+                .sources
+                .iter()
+                .filter(|(_, assigned)| *assigned == shard)
+                .filter_map(|(source, _)| match source {
+                    Source::Image(texture) | Source::GridImage(texture, _) => {
+                        Some(texture.width.max(texture.height))
+                    }
+                    Source::Diagnostic => None,
+                })
+                .max()
+                .unwrap_or(MIN_TILE);
+            let tile = largest.checked_next_power_of_two()?.max(MIN_TILE);
+            let layers = self
+                .sources
+                .iter()
+                .filter(|(_, assigned)| *assigned == shard)
+                .count();
+            total = total.checked_add(self.texture_policy.terrain_bytes(tile, layers)?)?;
+            if total > MAX_SUBSCRIBER_BYTES {
+                return None;
+            }
+            tiles.push(tile);
+        }
+        let mut sizes = Vec::with_capacity(self.sources.len());
+        let mut grids = Vec::with_capacity(self.sources.len());
+        let mut textures = Vec::with_capacity(shards);
+        for (shard, tile) in tiles.iter().copied().enumerate() {
+            let mut mips: Vec<Vec<u8>> = Vec::new();
+            let mut layers = 0u32;
+            for (source, assigned) in &self.sources {
+                if *assigned != shard {
+                    continue;
+                }
+                let (dimensions, chain) = match source {
+                    Source::Diagnostic => (
+                        [tile as u16; 2],
+                        assets::build_legacy_terrain_mip_chain(&diagnostic_pixels(tile), tile)
+                            .ok()?,
+                    ),
+                    Source::Image(texture) | Source::GridImage(texture, _) => {
+                        source_mip_chain(texture, tile)?
+                    }
+                };
+                let grid = if let Source::GridImage(_, grid) = source {
+                    *grid
+                } else {
+                    0
+                };
+                let (dimensions, chain, grid) =
+                    if dimensions.iter().any(|&size| size >> grid == 0) {
+                        self.gaps.missing_textures =
+                            self.gaps.missing_textures.saturating_add(1);
+                        (
+                            [tile as u16; 2],
+                            assets::build_legacy_terrain_mip_chain(&diagnostic_pixels(tile), tile)
+                                .ok()?,
+                            0,
+                        )
+                    } else {
+                        (dimensions.map(|size| size >> grid), chain, grid)
+                    };
+                sizes.push(dimensions);
+                grids.push(grid);
+                layers += 1;
+                mips.resize(chain.len(), Vec::new());
+                for (level, mip) in chain.iter().enumerate() {
+                    mips[level].extend_from_slice(&mip.rgba8);
+                }
+            }
+            let mut size = tile;
+            let mips = mips
+                .into_iter()
+                .map(|rgba8| {
+                    let mip = TextureMip {
+                        size,
+                        rgba8: rgba8.into_boxed_slice(),
+                    };
+                    size = (size / 2).max(1);
+                    mip
+                })
+                .collect::<Vec<_>>()
+                .into_boxed_slice();
+            textures.push(TextureArray {
+                layers,
+                mips,
             });
         }
+        self.overlay.texture_source_sizes = sizes;
+        self.overlay.texture_source_grids = grids;
+        self.overlay.textures = textures;
         Some(CompiledBlockOverlay {
             overlay: self.overlay,
             gaps: self.gaps,

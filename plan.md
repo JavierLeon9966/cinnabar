@@ -8282,7 +8282,10 @@ layers). Content dedupe was measured on the real packs and saves only 77 of
 therefore shards across up to four physical pages (pages 1-4; page 0 stays
 the base carrier), each within the device per-array limit, for a total
 capacity of four times the device limit capped at the 8,192-layer format
-maximum. `TextureRef` carries the page in three bits (shifts 28-30) with the
+maximum. Each shard takes the tile of its largest source instead of sharing
+one global tile, so small art never subsidizes HD neighbours and the shared
+byte budget binds late instead of dying on the first large texture.
+`TextureRef` carries the page in three bits (shifts 28-30) with the
 layer field unchanged; the GPU metadata word keeps its size/grid bits, and
 the chunk, model and liquid shaders select among five sRGB and five
 gamma views with new bindings 20-25 (samplers and biome tables stay where

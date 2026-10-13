@@ -86,18 +86,39 @@ fn mixed_terrain_keeps_hd_dimensions_and_adjacent_detail_pixels() {
     let (view, blocks) = fixture(&images);
     let compiled = compile_block_overlay(&view, &blocks, false, None).unwrap();
     assert_eq!(compiled.gaps.missing_textures, 0);
-    let page = compiled.overlay.textures.first().unwrap();
-    assert_eq!(page.mips[0].size, 512);
+    // Best fit segregates scales: each texture keeps its own tile instead of
+    // subsidizing the shared page up to the largest neighbour.
+    let mut tiles: Vec<u32> = compiled
+        .overlay
+        .textures
+        .iter()
+        .map(|shard| shard.mips[0].size)
+        .collect();
+    tiles.sort_unstable();
+    assert_eq!(tiles, vec![16, 256, 512]);
+    let mut starts = Vec::with_capacity(compiled.overlay.textures.len());
+    let mut flat = 0;
+    for shard in &compiled.overlay.textures {
+        starts.push(flat);
+        flat += shard.layers as usize;
+    }
     for (visual, (_, width, height)) in compiled.overlay.visuals.iter().zip(images) {
-        let layer = compiled.overlay.materials[visual.faces[0] as usize]
-            .texture
-            .layer() as usize;
+        let reference = compiled.overlay.materials[visual.faces[0] as usize].texture;
+        let shard = reference.page() as usize - 1;
+        let layer = reference.layer() as usize;
         assert_eq!(
-            compiled.overlay.texture_source_sizes[layer],
+            compiled.overlay.textures[shard].mips[0].size,
+            width.max(height) as u32,
+            "each scale keeps its own tile"
+        );
+        assert_eq!(
+            compiled.overlay.texture_source_sizes[starts[shard] + layer],
             [width as u16, height as u16]
         );
-        let pixels = &page.mips[0].rgba8[layer * 512 * 512 * 4..];
-        let next = (512 / width * 4) as usize;
+        let tile = compiled.overlay.textures[shard].mips[0].size;
+        let pixels =
+            &compiled.overlay.textures[shard].mips[0].rgba8[layer * (tile * tile * 4) as usize..];
+        let next = (tile / width * 4) as usize;
         assert_eq!(&pixels[..4], &[255, 255, 0, 255]);
         assert_eq!(&pixels[next..next + 4], &[0, 255, 0, 255]);
     }
