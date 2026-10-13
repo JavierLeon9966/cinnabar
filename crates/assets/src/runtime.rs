@@ -441,7 +441,6 @@ impl RuntimeAssets {
     }
     /// Overlay texture shards appended after the base carrier's page, in
     /// reference page order (page 1 first). Vanilla carriers decode none.
-    #[must_use]
     pub fn texture_shards(&self) -> impl ExactSizeIterator<Item = &TextureArray> {
         let first = self.texture_pages.len() - self.overlay_page_layer_counts.len();
         self.texture_pages[first..].iter().map(|page| &page.texture)

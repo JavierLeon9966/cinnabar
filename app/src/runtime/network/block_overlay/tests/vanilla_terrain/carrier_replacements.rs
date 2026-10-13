@@ -846,3 +846,5 @@ mod resolved_images;
 mod review_regressions;
 
 mod weighted_replacements;
+
+mod filename_precedence;

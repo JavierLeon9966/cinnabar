@@ -66,18 +66,18 @@ impl Builder<'_> {
         if carrier_policy && let Some(storage) = self.slots.frames(&storage_key, true) {
             return storage.map(|storage| (storage, false));
         }
-        for path in self
+        if let Some((path, pack)) = self
             .catalog
-            .reusable_image_paths(route, source, carrier_policy)
+            .reusable_image_path(route, source, |path, tint| {
+                super::textures::carrier_image_path(self.base_assets?, carrier?, path, tint)
+            })
         {
             let resolved_key = storage_key.clone().with_image(path);
-            if let Some(Some(storage)) = self.slots.frames(&resolved_key, false) {
-                self.slots.insert_frames(storage_key, Some(storage), false);
-                return Some((storage, true));
-            }
-            if carrier_policy && let Some(Some(storage)) = self.slots.frames(&resolved_key, true) {
-                self.slots.insert_frames(storage_key, Some(storage), true);
-                return Some((storage, false));
+            // An indexed pack filename is reusable only from a successful pack decode.
+            // A failed pack may fall back to a different carrier filename during decoding.
+            if let Some(Some(storage)) = self.slots.frames(&resolved_key, !pack) {
+                self.slots.insert_frames(storage_key, Some(storage), !pack);
+                return Some((storage, pack));
             }
         }
         if self.remaining_layers() == 0 {
