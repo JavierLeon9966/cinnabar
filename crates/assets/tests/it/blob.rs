@@ -857,15 +857,22 @@ fn read_u64(bytes: &[u8], offset: usize) -> u64 {
 
 #[test]
 fn world_carrier_rejects_the_previous_page_encoding_at_the_header() {
-    let mut bytes = encode_blob(&valid_assets()).unwrap().into_vec();
-    // Version 18 used a different page field and must fail before reference validation.
-    bytes[..8].copy_from_slice(b"MCBEAS18");
-    bytes[8..12].copy_from_slice(&18_u32.to_le_bytes());
-    let payload_length = bytes.len() - 32;
-    let digest = Sha256::digest(&bytes[..payload_length]);
-    bytes[payload_length..].copy_from_slice(&digest);
-    assert!(matches!(assets::RuntimeAssets::decode(&bytes),
-        Err(AssetError::InvalidCompiledAssets { detail }) if detail == "invalid world asset magic"));
+    let previous_version = BLOB_VERSION - 1;
+    let previous_magic = format!("MCBEAS{previous_version:02}");
+    for (magic, expected_detail) in [
+        (previous_magic.as_bytes(), "invalid world asset magic"),
+        (BLOB_MAGIC.as_slice(), "unsupported world asset header"),
+    ] {
+        let mut bytes = encode_blob(&valid_assets()).unwrap().into_vec();
+        // An older carrier must fail before reference validation, even with current magic.
+        bytes[..8].copy_from_slice(magic);
+        bytes[8..12].copy_from_slice(&previous_version.to_le_bytes());
+        let payload_length = bytes.len() - 32;
+        let digest = Sha256::digest(&bytes[..payload_length]);
+        bytes[payload_length..].copy_from_slice(&digest);
+        assert!(matches!(assets::RuntimeAssets::decode(&bytes),
+            Err(AssetError::InvalidCompiledAssets { detail }) if detail.as_ref() == expected_detail));
+    }
 }
 
 #[test]
