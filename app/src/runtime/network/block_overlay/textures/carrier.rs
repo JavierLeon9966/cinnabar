@@ -3,6 +3,9 @@
 use super::{DecodedTexture, TextureImage};
 use assets::{RuntimeAssets, material_keys::MaterialKeys};
 
+/// A square donor's side, borrowed first-mip pixels, and optional baked tint.
+type CarrierPixels<'a> = (u32, &'a [u8], Option<[u8; 3]>);
+
 /// Reads only static donor pixels; baked animation timelines are not physical source strips.
 pub(in super::super) fn carrier_image(
     base: &RuntimeAssets,
@@ -39,7 +42,7 @@ fn carrier_pixels<'a>(
     keys: &MaterialKeys,
     path: &str,
     tint: Option<[u8; 3]>,
-) -> Option<(u32, &'a [u8], Option<[u8; 3]>)> {
+) -> Option<CarrierPixels<'a>> {
     let (id, source) = keys
         .material_sources()
         .filter(|(id, source)| {

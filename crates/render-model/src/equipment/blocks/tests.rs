@@ -522,7 +522,7 @@ fn weighted_replacement_updates_held_pixels_and_keeps_the_variation_range() {
     let world = RuntimeAssets::decode(&assets::encode_blob(&compiled).unwrap()).unwrap();
     let original = compose_sheet(&world, &[selector; 6]).unwrap();
     let replacement = BlockOverlay {
-        texture: overlay(BlockFlags::CUBE_GEOMETRY, 0, 16).texture,
+        textures: overlay(BlockFlags::CUBE_GEOMETRY, 0, 16).textures,
         material_overrides: (selector..selector + 3)
             .map(|material| assets::MaterialOverride {
                 material,
