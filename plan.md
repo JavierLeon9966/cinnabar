@@ -8352,31 +8352,18 @@ expressions still need their own admission and coverage work.
 
 ## Overlay vanilla-texture fallback
 
-Server blocks whose material instances name vanilla textures (`down:oak_planks`,
-`*:cherry_planks`) degrade to diagnostic visuals: the overlay catalog reads
-rasters only from the server pack stack, the vanilla files are absent there,
-and the miss is silenced by the vanilla-fallback suppression, so one vanilla
-face sinks the whole visual. Measured on the reporter's stack, about 63% of
-the remaining diagnostic blocks match this pattern; their pack-side keys all
-resolve. Neither the admission fix nor the shard fix covers it: saturated is
-zero while these stay purple. The fix is its own change (base-carrier texture
-references or baked vanilla layers at compile time) with a regression test
-naming a vanilla-referencing furniture block.
+Implemented: custom blocks naming vanilla textures absent from the server
+stack can borrow a static page-0 texture from the matching base carrier.
+The resolver uses the retained atlas and UV indices to select variant zero,
+independent of material ID order. Server material flags remain overlay-local,
+and borrowing consumes no texture layer or byte budget. Server rasters take
+precedence when they decode; capacity and budget refusals remain refusals.
+Borrowed layers are validated against the base page, and vanilla material
+overrides continue to require overlay textures.
 
-Implemented: the overlay compiler takes the base carrier's material table
-alongside its keys and admits faces naming vanilla keys the server stack
-does not ship as page-0 materials with the server's flags and no animation,
-consuming no overlay layer or byte budget. Server rasters still win whenever
-they decode, and saturated/budgeted refusals keep their meaning because the
-fallback only answers decode failures. `with_block_overlay` validates
-borrowed base layers against the base page; overrides stay overlay-local so
-a fallback never retargets a vanilla material. Block-item sheets and
-inventory icons for fallback faces are still overlay-only and fall back to
-their placeholders; animated vanilla art keeps its motion on base blocks
-alone. Regression coverage: a chair-like cube reuses the base layer with
-zero missing textures and applies onto a session, the same chair without a
-base stays diagnostic, server rasters win, unknown keys stay diagnostic,
-plus asset-side resolver and validation tests. Replay-verification on the
-reporter's stack remains pending (needs the admission and shard branches
-merged in scratch); the expected delta is the ~63% furniture share of the
-remaining diagnostic blocks.
+Regression coverage includes sidecar roundtrips with reversed variant order,
+missing or ineligible variant-zero materials, custom-block publication,
+server-raster precedence, diagnostic fallback, and admission refusals. Live
+visual verification remains pending. Block-item sheets and inventory icons
+still use placeholders for borrowed faces, and animated vanilla art remains
+limited to base blocks.

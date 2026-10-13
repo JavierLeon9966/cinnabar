@@ -34,19 +34,29 @@ fn base_materials() -> Vec<assets::Material> {
     ]
 }
 
-/// Encodes a small base carrier with static materials and one texture layer.
-fn base() -> RuntimeAssets {
+/// Encodes static materials with enough base layers for every supplied reference.
+fn base(materials: Vec<assets::Material>) -> RuntimeAssets {
     let diagnostic = RuntimeAssets::diagnostic();
+    let layers = materials
+        .iter()
+        .map(|material| material.texture.layer() + 1)
+        .max()
+        .unwrap();
+    let mut pages = diagnostic.texture_pages().to_vec();
+    pages[0].texture.layers = layers;
+    for mip in &mut pages[0].texture.mips {
+        mip.rgba8 = mip.rgba8.repeat(layers as usize).into();
+    }
     let compiled = assets::CompiledAssets {
         visuals: vec![super::super::diagnostic_visual()].into(),
         light_properties: vec![assets::LightProperties::OPAQUE_DARK].into(),
         hashed: Box::new([]),
-        materials: base_materials().into(),
+        materials: materials.into(),
         model_templates: Box::new([]),
         model_quads: Box::new([]),
         animations: Box::new([]),
         animation_frames: Box::new([]),
-        texture_pages: diagnostic.texture_pages().to_vec().into(),
+        texture_pages: pages.into(),
         biomes: assets::CompiledBiomeAssets::diagnostic(),
         provenance: assets::BlobProvenance {
             source_manifest_sha256: [1; 32],
@@ -78,7 +88,7 @@ fn compile(
     blocks: &CustomBlocks,
     keys: Option<&assets::material_keys::MaterialKeys>,
 ) -> super::super::CompiledBlockOverlay {
-    let base = base();
+    let base = base(base_materials());
     super::super::compile_block_overlay(
         &view(),
         blocks,
@@ -173,4 +183,57 @@ fn unknown_keys_stay_diagnostic_with_a_base() {
     let compiled = compile(&blocks, Some(&keys));
     assert_eq!(compiled.overlay.visuals[0].kind, VisualKind::Diagnostic);
     assert_eq!(compiled.gaps.missing_textures, 1);
+}
+
+#[test]
+fn custom_fallback_uses_the_first_catalog_variant_after_sidecar_roundtrip() {
+    let mut materials = base_materials();
+    materials[1].texture = assets::TextureRef::new(0, 1).unwrap();
+    materials[2].texture = assets::TextureRef::new(0, 2).unwrap();
+    let base = base(materials);
+    let keys = assets::material_keys::MaterialKeys::from_entries([(1, "farmland"), (2, "farmland")])
+        .with_aliases([("farmland", "textures/blocks/farmland_wet")])
+        .with_flipbook_selectors([(1, (1, 0)), (2, (0, 0))])
+        .with_sources(
+            [("farmland".into(), serde_json::json!({"textures": ["textures/blocks/farmland_wet", "textures/blocks/farmland_dry"]}))],
+            [],
+            [],
+        );
+    let keys = assets::material_keys::MaterialKeys::from_json(
+        &keys.to_json(base.materials().len() as u32),
+        base.materials().len(),
+    )
+    .unwrap();
+    let blocks = CustomBlocks {
+        blocks: vec![chair("test:farmland_chair", "farmland")].into(),
+        ..Default::default()
+    };
+    let compiled = super::super::compile_block_overlay(
+        &view(),
+        &blocks,
+        false,
+        Some(&keys),
+        assets::MAX_TEXTURE_LAYERS as u32,
+        Some(&base),
+    )
+    .unwrap();
+    assert_eq!(compiled.gaps.missing_textures, 0);
+    assert_eq!(compiled.overlay.visuals[0].kind, VisualKind::Cube);
+    let face = compiled.overlay.visuals[0].faces[BlockFace::Up as usize];
+    assert_eq!(
+        compiled.overlay.materials[face as usize].texture,
+        base.material(2).texture
+    );
+    assert_eq!(compiled.overlay.texture.as_ref().unwrap().layers, 1);
+    assert!(compiled.overlay.material_overrides.is_empty());
+    let session = base.with_block_overlay(1, &compiled.overlay).unwrap();
+    let face = session
+        .resolve(NetworkIdMode::Sequential, 1)
+        .face(BlockFace::Up);
+    assert_eq!(
+        session.material(face.material_id()).texture,
+        base.material(2).texture
+    );
+    assert_eq!(session.material(1), base.material(1));
+    assert_eq!(session.material(2), base.material(2));
 }

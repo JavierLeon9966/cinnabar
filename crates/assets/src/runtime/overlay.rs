@@ -67,16 +67,21 @@ pub struct VanillaFallback<'a> {
 }
 
 impl<'a> VanillaFallback<'a> {
+    /// Borrows matching texture keys and materials from the same base carrier.
     #[must_use]
     pub const fn new(keys: &'a MaterialKeys, materials: &'a [Material]) -> Self {
         Self { keys, materials }
     }
 
-    /// Returns the base page reference behind `key`, or `None` when the base
-    /// carrier compiled no material from it.
+    /// Returns the static variant-zero base reference for `key`, or `None`
+    /// when that destination has no eligible material.
     #[must_use]
     pub fn texture(&self, key: &str) -> Option<TextureRef> {
-        let &id = self.keys.materials(key).first()?;
+        let &id = self
+            .keys
+            .materials(key)
+            .iter()
+            .find(|&&id| self.keys.flipbook_selector(id) == (0, 0))?;
         if id == crate::DIAGNOSTIC_MATERIAL {
             return None;
         }
@@ -853,6 +858,65 @@ mod tests {
         assert!(
             VanillaFallback::new(&diagnostic, &materials)
                 .texture("oak_planks")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn vanilla_fallback_uses_catalog_variant_zero_instead_of_material_order() {
+        let materials = [
+            Material::unvaried(),
+            Material {
+                texture: TextureRef::new(0, 1).unwrap(),
+                ..Material::unvaried()
+            },
+            Material {
+                texture: TextureRef::new(0, 2).unwrap(),
+                ..Material::unvaried()
+            },
+        ];
+        for first_destination in [(1, 0), (0, 1)] {
+            let keys = MaterialKeys::from_entries([(2, "farmland"), (1, "farmland")])
+                .with_aliases([("farmland", "textures/blocks/farmland_wet")])
+                .with_flipbook_selectors([(1, first_destination), (2, (0, 0))]);
+            let keys =
+                MaterialKeys::from_json(&keys.to_json(materials.len() as u32), materials.len())
+                    .unwrap();
+            let fallback = VanillaFallback::new(&keys, &materials);
+            assert_eq!(fallback.texture("farmland"), Some(materials[2].texture));
+        }
+    }
+
+    #[test]
+    fn vanilla_fallback_does_not_substitute_another_static_variant() {
+        let keys = MaterialKeys::from_entries([(1, "farmland"), (2, "farmland")])
+            .with_flipbook_selectors([(1, (1, 0)), (2, (0, 0))]);
+        for variant_zero in [
+            Material {
+                animation: 0,
+                ..Material::unvaried()
+            },
+            Material {
+                texture: TextureRef::new(1, 0).unwrap(),
+                ..Material::unvaried()
+            },
+            Material {
+                variation_count: 1,
+                ..Material::unvaried()
+            },
+        ] {
+            let materials = [Material::unvaried(), Material::unvaried(), variant_zero];
+            assert!(
+                VanillaFallback::new(&keys, &materials)
+                    .texture("farmland")
+                    .is_none()
+            );
+        }
+        let keys =
+            MaterialKeys::from_entries([(1, "farmland")]).with_flipbook_selectors([(1, (1, 0))]);
+        assert!(
+            VanillaFallback::new(&keys, &[Material::unvaried(); 2])
+                .texture("farmland")
                 .is_none()
         );
     }
