@@ -952,6 +952,7 @@ mod tests {
             material: 1,
             texture: TextureRef::new(0, 0).unwrap(),
             animation: NO_ANIMATION,
+            variation: None,
         }];
         assert!(base.with_block_overlay(1, &overlay).is_err());
     }

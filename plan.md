@@ -8368,7 +8368,9 @@ independent of material ID order. Server material flags remain overlay-local,
 and borrowing consumes no texture layer or byte budget. Server rasters take
 precedence when they decode; capacity and budget refusals remain refusals.
 Borrowed layers are validated against the base page, and vanilla material
-overrides continue to require overlay textures.
+overrides continue to require overlay textures. Changed catalog routes whose
+pack pixels cannot be decoded stay diagnostic for custom blocks; they never
+borrow the original key's artwork.
 
 Regression coverage includes sidecar roundtrips with reversed variant order,
 missing or ineligible variant-zero materials, custom-block publication,

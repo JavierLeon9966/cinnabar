@@ -237,3 +237,80 @@ fn custom_fallback_uses_the_first_catalog_variant_after_sidecar_roundtrip() {
     assert_eq!(session.material(1), base.material(1));
     assert_eq!(session.material(2), base.material(2));
 }
+
+#[test]
+fn custom_fallback_rejects_redirected_catalog_routes_without_pack_pixels() {
+    use assets::material_keys::{MaterialKeys, MaterialTextureSource};
+    use serde_json::json;
+
+    let mut materials = base_materials();
+    materials[1].texture = assets::TextureRef::new(0, 1).unwrap();
+    materials[2].texture = assets::TextureRef::new(0, 2).unwrap();
+    let base = base(materials);
+    let keys = MaterialKeys::from_entries([(1, "oak_planks"), (2, "birch_planks")])
+        .with_aliases([
+            ("oak_planks", "textures/blocks/oak_planks"),
+            ("birch_planks", "textures/blocks/birch_planks"),
+        ])
+        .with_sources(
+            [],
+            [(1, "oak_planks"), (2, "birch_planks")].map(|(id, key)| {
+                let path = format!("textures/blocks/{key}");
+                (
+                    id,
+                    MaterialTextureSource {
+                        key: key.into(),
+                        variant: 0,
+                        path: path.clone().into(),
+                        raster: format!("{path}.png").into(),
+                        baked_tint: None,
+                    },
+                )
+            }),
+            [],
+        );
+    let blocks = CustomBlocks {
+        blocks: vec![chair("test:chair", "oak_planks")].into(),
+        ..Default::default()
+    };
+    for (path, expected_kind, replaces_base) in [
+        ("textures/blocks/birch_planks", VisualKind::Diagnostic, true),
+        ("textures/blocks/absent", VisualKind::Diagnostic, false),
+        ("textures/blocks/oak_planks", VisualKind::Cube, false),
+        ("textures/blocks/lucky", VisualKind::Cube, true),
+    ] {
+        let terrain = json!({"texture_data":{"oak_planks":{"textures":path}}});
+        let view = view_with_catalog(GEOMETRY.as_bytes(), &terrain.to_string());
+        let compiled = super::super::compile_block_overlay(
+            &view,
+            &blocks,
+            false,
+            Some(&keys),
+            assets::MAX_TEXTURE_LAYERS as u32,
+            Some(&base),
+        )
+        .unwrap();
+        assert_eq!(compiled.overlay.visuals[0].kind, expected_kind, "{path}");
+        assert_eq!(
+            compiled.gaps.missing_textures,
+            u32::from(expected_kind == VisualKind::Diagnostic)
+        );
+        assert_eq!(
+            compiled
+                .overlay
+                .material_overrides
+                .iter()
+                .any(|replacement| replacement.material == 1),
+            replaces_base
+        );
+        let session = base.with_block_overlay(1, &compiled.overlay).unwrap();
+        assert_eq!(
+            session.resolve(NetworkIdMode::Sequential, 1).kind(),
+            expected_kind
+        );
+        assert_eq!(session.material(2), base.material(2));
+        if replaces_base {
+            assert_eq!(session.material(1).texture.page(), 1);
+        }
+    }
+}

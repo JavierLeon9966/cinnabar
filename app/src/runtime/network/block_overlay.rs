@@ -519,7 +519,7 @@ impl Builder<'_> {
         (material, alpha_flags, two_sided)
     }
 
-    /// Resolves the default state and choice for a custom block material.
+    /// Resolves a custom block's default choice, borrowing only unchanged base routes.
     fn texture_slot(&mut self, key: &str) -> Option<TextureSlot> {
         let route = TextureRoute::Catalog {
             key: key.to_owned(),
@@ -527,6 +527,10 @@ impl Builder<'_> {
             choice: 0,
         };
         self.route_slot(route.clone()).or_else(|| {
+            // A changed catalog can name different pixels, tint, or UV sampling.
+            if self.catalog.redefined(key, 0) {
+                return None;
+            }
             let storage_key = self.catalog.storage_key(&route, None)?;
             if !matches!(
                 self.slots.frames(&storage_key, false),
