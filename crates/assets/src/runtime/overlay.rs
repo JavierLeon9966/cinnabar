@@ -5,8 +5,8 @@ use std::sync::atomic::AtomicU64;
 use super::RuntimeAssets;
 use crate::{
     Animation, AssetError, BlockFlags, BlockVisual, LightProperties, MAX_MATERIALS,
-    MAX_TEXTURE_LAYERS, MAX_TILE_SIZE, Material, ModelQuad, ModelTemplate, NO_ANIMATION,
-    NO_MODEL_TEMPLATE, TextureArray, TexturePage, TextureRef, VisualKind,
+    MAX_TEXTURE_LAYERS, MAX_TEXTURE_PAGES, MAX_TILE_SIZE, Material, ModelQuad, ModelTemplate,
+    NO_ANIMATION, NO_MODEL_TEMPLATE, TextureArray, TexturePage, TextureRef, VisualKind,
     compiled::material_flags_are_valid, compiled::visual_semantics_are_valid,
     model::model_quad_flags_are_valid,
 };
@@ -23,8 +23,8 @@ pub struct MaterialOverride {
 
 /// Server block visuals whose indices are local to the overlay: face and quad
 /// material ids index `materials`, templates index `model_templates`, and
-/// texture references use page 1 layers of `texture`.
-#[derive(Clone, Debug, Default)]
+/// texture references use pages 1..=`SHARD_COUNT` layers of `textures`.
+#[derive(Clone, Debug)]
 pub struct BlockOverlay {
     pub visuals: Vec<BlockVisual>,
     /// Carried unit-cube faces keyed by sorted session visual ids; independent of world offsets.
@@ -37,9 +37,12 @@ pub struct BlockOverlay {
     pub model_quads: Vec<ModelQuad>,
     pub animations: Vec<Animation>,
     pub animation_frames: Vec<TextureRef>,
-    pub texture: Option<TextureArray>,
-    /// Source pixel dimensions per layer, with mips built before array expansion.
-    /// Empty means the physical page size and legacy terrain mips are rebuilt at upload.
+    /// Overlay texture shards in reference page order, page zero excluded. A
+    /// large server palette splits across these to stay inside the device's
+    /// per-array layer limit; a single shard is the usual case.
+    pub textures: Vec<TextureArray>,
+    /// Source pixel dimensions per flat layer. Empty means the physical page
+    /// size and legacy terrain mips are rebuilt at upload.
     pub texture_source_sizes: Vec<[u16; 2]>,
     /// Per-layer terrain UV-grid exponents, parallel to source pixel dimensions.
     pub texture_source_grids: Vec<u8>,
@@ -48,6 +51,34 @@ pub struct BlockOverlay {
     pub material_overrides: Vec<MaterialOverride>,
     /// Optional pack-defined tint maps and biome appearance rules.
     pub biomes: Option<crate::CompiledBiomeAssets>,
+    /// The per-array layer limit the shards were built against, so a carrier
+    /// laid out for one adapter never reaches a smaller one.
+    pub max_page_layers: u32,
+}
+
+/// A hand-built overlay with no device restriction inherits the format
+/// reference; only a compiled session overlay records a smaller device limit.
+impl Default for BlockOverlay {
+    fn default() -> Self {
+        Self {
+            visuals: Vec::new(),
+            carried_cube_faces: Vec::new(),
+            light_properties: Vec::new(),
+            materials: Vec::new(),
+            model_templates: Vec::new(),
+            model_random_offsets: Vec::new(),
+            model_quads: Vec::new(),
+            animations: Vec::new(),
+            animation_frames: Vec::new(),
+            textures: Vec::new(),
+            texture_source_sizes: Vec::new(),
+            texture_source_grids: Vec::new(),
+            hashes: Vec::new(),
+            material_overrides: Vec::new(),
+            biomes: None,
+            max_page_layers: MAX_TEXTURE_LAYERS as u32,
+        }
+    }
 }
 
 impl RuntimeAssets {
@@ -74,20 +105,41 @@ impl RuntimeAssets {
         if !overlay.hashes.is_empty() && overlay.hashes.len() != overlay.visuals.len() {
             return Err(invalid("overlay hashes and visuals disagree"));
         }
-        let layers = overlay.texture.as_ref().map_or(0, |texture| texture.layers);
-        if layers as usize > MAX_TEXTURE_LAYERS {
-            return Err(invalid("overlay texture page exceeds the layer limit"));
+        let shards = overlay.textures.len();
+        if shards + 1 > MAX_TEXTURE_PAGES {
+            return Err(invalid("overlay texture shards are not bounded"));
         }
-        if let Some(texture) = &overlay.texture {
-            validate_texture(texture)?;
+        let max_page_layers = overlay.max_page_layers;
+        if max_page_layers == 0 {
+            return Err(invalid("overlay shards were built against no array limit"));
         }
+        let shard_layers = |shard: &TextureArray| -> Result<usize, AssetError> {
+            let layers = shard.layers as usize;
+            if layers == 0 || layers as u32 > max_page_layers || layers > MAX_TEXTURE_LAYERS {
+                return Err(invalid(
+                    "overlay texture shard exceeds the device or format limit",
+                ));
+            }
+            Ok(layers)
+        };
+        let mut shard_arrays = Vec::with_capacity(shards);
+        let mut flat_layers = 0usize;
+        for shard in &overlay.textures {
+            let layers = shard_layers(shard)?;
+            validate_texture(shard)?;
+            flat_layers += layers;
+            shard_arrays.push(shard.clone());
+        }
+        let total_layers = flat_layers as u32;
         if !overlay.texture_source_sizes.is_empty() {
             let base = overlay
-                .texture
-                .as_ref()
-                .and_then(|texture| texture.mips.first())
-                .map_or(0, |mip| mip.size);
-            if overlay.texture_source_sizes.len() != layers as usize
+                .textures
+                .iter()
+                .filter_map(|shard| shard.mips.first())
+                .map(|mip| mip.size)
+                .max()
+                .unwrap_or(0);
+            if overlay.texture_source_sizes.len() != total_layers as usize
                 || overlay
                     .texture_source_sizes
                     .iter()
@@ -99,12 +151,14 @@ impl RuntimeAssets {
         }
         if !overlay.texture_source_grids.is_empty() {
             let base = overlay
-                .texture
-                .as_ref()
-                .and_then(|texture| texture.mips.first())
-                .map_or(0, |mip| mip.size);
-            if overlay.texture_source_grids.len() != layers as usize
-                || overlay.texture_source_sizes.len() != layers as usize
+                .textures
+                .iter()
+                .filter_map(|shard| shard.mips.first())
+                .map(|mip| mip.size)
+                .max()
+                .unwrap_or(0);
+            if overlay.texture_source_grids.len() != total_layers as usize
+                || overlay.texture_source_sizes.len() != total_layers as usize
                 || overlay
                     .texture_source_grids
                     .iter()
@@ -130,8 +184,13 @@ impl RuntimeAssets {
             return Err(invalid("overlay materials exceed the material limit"));
         }
         let page_ref = |reference: TextureRef| -> Result<TextureRef, AssetError> {
-            if reference.page() != 1 || reference.layer() >= layers {
-                return Err(invalid("overlay texture reference is outside its page"));
+            let shard = reference
+                .page()
+                .checked_sub(1)
+                .filter(|shard| (*shard as usize) < shards)
+                .ok_or_else(|| invalid("overlay texture reference is outside its page"))?;
+            if reference.layer() >= overlay.textures[shard as usize].layers {
+                return Err(invalid("overlay texture reference is outside its shard"));
             }
             Ok(reference)
         };
@@ -380,8 +439,10 @@ impl RuntimeAssets {
         hashed.sort_by_key(|entry| entry.0);
         hashed.dedup_by_key(|entry| entry.0);
         let mut texture_pages = self.texture_pages.to_vec();
-        if let Some(texture) = &overlay.texture {
-            texture_pages.push(TexturePage::new(texture.clone()));
+        let mut overlay_page_layer_counts = Vec::with_capacity(shard_arrays.len());
+        for shard in &shard_arrays {
+            overlay_page_layer_counts.push(shard.layers as usize);
+            texture_pages.push(TexturePage::new(shard.clone()));
         }
         Ok(Self {
             visuals: visuals.into_boxed_slice(),
@@ -396,6 +457,8 @@ impl RuntimeAssets {
             texture_pages: texture_pages.into_boxed_slice(),
             overlay_texture_source_sizes: overlay.texture_source_sizes.clone().into_boxed_slice(),
             overlay_texture_source_grids: overlay.texture_source_grids.clone().into_boxed_slice(),
+            overlay_texture_shards: shard_arrays.into_boxed_slice(),
+            overlay_page_layer_counts: overlay_page_layer_counts.into_boxed_slice(),
             biomes: overlay
                 .biomes
                 .clone()
@@ -515,7 +578,7 @@ mod tests {
                 animation: NO_ANIMATION,
                 ..crate::Material::unvaried()
             }],
-            texture: Some(texture),
+            textures: vec![texture],
             ..BlockOverlay::default()
         }
     }

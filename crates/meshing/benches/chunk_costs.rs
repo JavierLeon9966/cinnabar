@@ -71,7 +71,7 @@ fn terrain_assets() -> RuntimeAssets {
             visuals: vec![visual(0), visual(1)],
             light_properties: vec![LightProperties::OPAQUE_DARK; 2],
             materials: vec![material; 2],
-            texture: Some(texture),
+            textures: vec![texture],
             ..Default::default()
         },
     )

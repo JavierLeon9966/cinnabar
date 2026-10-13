@@ -8272,3 +8272,25 @@ selectors and output ranges for the existing explicit model bindings. Unrecogniz
 model arrays stay unresolved instead of guessing from growth or selecting index zero.
 The generic terrain accessor, complete native binding inventory and custom selector
 expressions still need their own admission and coverage work.
+## Overlay texture sharding across device-limited arrays
+
+Server stacks can name more distinct block textures (~4,800 in one report)
+than a single texture array holds on the device (`max_texture_array_layers`
+is 2,048 on the reporter's Vulkan adapter, while the format supports 8,192
+layers). Content dedupe was measured on the real packs and saves only 77 of
+4,744 routes, so sharing identical rasters cannot close the gap. The overlay
+therefore shards across up to four physical pages (pages 1-4; page 0 stays
+the base carrier), each within the device per-array limit, for a total
+capacity of four times the device limit capped at the 8,192-layer format
+maximum. `TextureRef` carries the page in three bits (shifts 28-30) with the
+layer field unchanged; the GPU metadata word keeps its size/grid bits, and
+the chunk, model and liquid shaders select among five sRGB and five
+gamma views with new bindings 20-25 (samplers and biome tables stay where
+they are). The blob version bumps 17 to 18 so old carriers fail closed and
+rebuild. Unused shard slots bind the existing diagnostic fallback.
+
+Incomplete: implementation, per-crate tests, the synthetic saturation
+regression (5,000 textures at a 2,048 device limit must compile to three
+shards with zero refusals), and the offline replay check that the reported
+stack's `saturated_textures` drops to zero. This does not close a parity
+gate until rendered-frame evidence confirms it.

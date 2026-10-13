@@ -224,13 +224,44 @@ pub enum TexturePageBinding {
 }
 
 #[must_use]
-pub const fn plan_texture_page_bindings(page_count: usize) -> Option<[TexturePageBinding; 2]> {
+pub const fn plan_texture_page_bindings(page_count: usize) -> Option<[TexturePageBinding; 5]> {
     match page_count {
+        0 => None,
         1 => Some([
             TexturePageBinding::Asset(0),
             TexturePageBinding::DiagnosticFallback,
+            TexturePageBinding::DiagnosticFallback,
+            TexturePageBinding::DiagnosticFallback,
+            TexturePageBinding::DiagnosticFallback,
         ]),
-        2 => Some([TexturePageBinding::Asset(0), TexturePageBinding::Asset(1)]),
+        2 => Some([
+            TexturePageBinding::Asset(0),
+            TexturePageBinding::Asset(1),
+            TexturePageBinding::DiagnosticFallback,
+            TexturePageBinding::DiagnosticFallback,
+            TexturePageBinding::DiagnosticFallback,
+        ]),
+        3 => Some([
+            TexturePageBinding::Asset(0),
+            TexturePageBinding::Asset(1),
+            TexturePageBinding::Asset(2),
+            TexturePageBinding::DiagnosticFallback,
+            TexturePageBinding::DiagnosticFallback,
+        ]),
+        4 => Some([
+            TexturePageBinding::Asset(0),
+            TexturePageBinding::Asset(1),
+            TexturePageBinding::Asset(2),
+            TexturePageBinding::Asset(3),
+            TexturePageBinding::DiagnosticFallback,
+        ]),
+        5 => Some([
+            TexturePageBinding::Asset(0),
+            TexturePageBinding::Asset(1),
+            TexturePageBinding::Asset(2),
+            TexturePageBinding::Asset(3),
+            TexturePageBinding::Asset(4),
+        ]),
         _ => None,
     }
 }

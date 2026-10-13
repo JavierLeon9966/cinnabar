@@ -38,14 +38,14 @@ fn geometry_block(flags: u32) -> BlockOverlay {
             material: 1,
             flags: 0,
         }],
-        texture: Some(TextureArray {
+        textures: vec![TextureArray {
             layers: 1,
             mips: [TextureMip {
                 size: 16,
                 rgba8: vec![200; 16 * 16 * 4].into(),
             }]
             .into(),
-        }),
+        }],
         ..Default::default()
     }
 }

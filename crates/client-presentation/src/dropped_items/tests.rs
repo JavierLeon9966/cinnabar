@@ -49,10 +49,10 @@ fn potted_models_sample_the_exposed_server_texture_grid() {
                 },
             ],
             model_quads: vec![quad, cropped, quad],
-            texture: Some(assets::TextureArray {
+            textures: vec![assets::TextureArray {
                 layers: 1,
                 mips: assets::build_texture_mip_chain(pixels.clone().into(), side).unwrap(),
-            }),
+            }],
             texture_source_sizes: vec![[side as u16 >> grid; 2]],
             texture_source_grids: vec![grid],
             ..assets::BlockOverlay::default()

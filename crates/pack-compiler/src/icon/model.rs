@@ -29,8 +29,14 @@ struct Face<'a> {
 enum Textures<'a> {
     /// World carrier pages, indexed by each material's page.
     World(&'a [TexturePage]),
-    /// A session overlay's one array, which its materials address as page 1.
-    Overlay(&'a TextureArray, &'a [u8]),
+    /// A session overlay's shards, addressed from page one.
+    Overlay(&'a [TextureArray], &'a [u8]),
+}
+
+/// Selects the overlay shard a material's reference page addresses.
+fn overlayshard(shards: &[TextureArray], page: u32) -> Option<&TextureArray> {
+    let shard = page.checked_sub(1)? as usize;
+    shards.get(shard)
 }
 
 #[derive(Clone, Copy)]
@@ -100,12 +106,14 @@ impl<'a> Model<'a> {
     /// State `visual` of a session block overlay.
     pub(super) fn overlay(overlay: &'a BlockOverlay, visual: usize) -> Result<Self, Reject> {
         let block = overlay.visuals.get(visual).ok_or(Reject::Geometry)?;
-        let texture = overlay.texture.as_ref().ok_or(Reject::Texture)?;
+        if overlay.textures.is_empty() {
+            return Err(Reject::Texture);
+        }
         let parts = Parts {
             materials: &overlay.materials,
             templates: &overlay.model_templates,
             quads: &overlay.model_quads,
-            textures: Textures::Overlay(texture, &overlay.texture_source_grids),
+            textures: Textures::Overlay(&overlay.textures, &overlay.texture_source_grids),
         };
         let template = (block.model_template != NO_MODEL_TEMPLATE).then_some(block.model_template);
         Self::build(parts, block.kind, block.faces, template)
@@ -203,7 +211,7 @@ impl<'a> Model<'a> {
 fn tile(parts: Parts<'_>, id: u32) -> Result<(&[u8], usize, bool, f32), Reject> {
     let (tile, side, blend) = material_tile(parts.materials, id, |page| match parts.textures {
         Textures::World(pages) => pages.get(page as usize).map(|page| &page.texture),
-        Textures::Overlay(array, _) => (page == 1).then_some(array),
+        Textures::Overlay(shards, _) => overlayshard(shards, page),
     })
     .map_err(reject)?;
     let material = &parts.materials[id as usize];

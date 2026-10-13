@@ -113,7 +113,7 @@ fn terrain_override_mips_average_unassociated_leaf_alpha_and_colours() {
             rgba8: pixels.into_boxed_slice(),
         }));
     let compiled = builder.finish().unwrap();
-    let page = compiled.overlay.texture.unwrap();
+    let page = compiled.overlay.textures.first().unwrap().clone();
     assert_eq!(&page.mips[1].rgba8[..4], &[50, 25, 10, 63]);
     assert_eq!(&page.mips[3].rgba8[..4], &[50, 25, 10, 63]);
 }
@@ -283,7 +283,7 @@ fn terrain_override_small_images_keep_their_source_mips_beside_hd_images() {
         rgba8: vec![255; 64 * 64 * 4].into(),
     };
     let overlay = overlay_images([small, large]);
-    let page = overlay.texture.unwrap();
+    let page = overlay.textures.first().unwrap().clone();
     assert_eq!(page.mips[0].size, 64);
     assert_eq!(&page.mips[1].rgba8[..4], &[127, 0, 127, 255]);
     assert_eq!(&page.mips[3].rgba8[..4], &[127, 0, 127, 255]);
@@ -305,7 +305,7 @@ fn terrain_override_static_vertical_strip_admits_its_first_square() {
             .collect(),
     };
     let overlay = overlay_images([strip]);
-    let page = overlay.texture.unwrap();
+    let page = overlay.textures.first().unwrap().clone();
     assert!(
         page.mips[0]
             .rgba8

@@ -39,10 +39,10 @@ fn overlay(flags: BlockFlags, material_flags: u32, size: u32) -> BlockOverlay {
                 ..Material::unvaried()
             },
         ],
-        texture: Some(TextureArray {
+        textures: vec![TextureArray {
             layers: 2,
             mips: mips.into(),
-        }),
+        }],
         ..Default::default()
     }
 }
@@ -92,7 +92,7 @@ fn world_isotropy_preserves_carried_cube_face_pixels() {
             flags,
             BLOCK_ITEM_FACE_SIDE.into(),
         );
-        source.texture.as_mut().unwrap().mips[0].rgba8[TILE * TILE * 4] = 91;
+        source.textures.first_mut().unwrap().mips[0].rgba8[TILE * TILE * 4] = 91;
         let expected = overlay_sheet(&source, 0).unwrap();
         source.materials[1].flags |= assets::MATERIAL_FLAG_ISOTROPIC;
         let actual = overlay_sheet(&source, 0)
@@ -248,7 +248,7 @@ fn pinned_portal_frame_keeps_its_short_block_mesh_and_distinct_faces() {
 fn overlay_sheet_preserves_source_resolution_when_physical_page_is_larger() {
     let mut source = overlay(BlockFlags::CUBE_GEOMETRY, 0, 64);
     source.texture_source_sizes = vec![[16; 2]; 2];
-    let texture = source.texture.as_mut().unwrap();
+    let texture = source.textures.first_mut().unwrap();
     for mip in &mut texture.mips {
         for layer in 0..2usize {
             let side = mip.size as usize;

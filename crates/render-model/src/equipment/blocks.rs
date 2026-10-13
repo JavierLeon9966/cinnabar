@@ -273,18 +273,20 @@ fn overlay_face_tile(overlay: &BlockOverlay, material: &Material) -> Option<Icon
     if !face_material_is_admitted(material) {
         return None;
     }
-    let texture = overlay.texture.as_ref()?;
+    let shard = material.texture.page().checked_sub(1)? as usize;
+    let texture = overlay.textures.get(shard)?;
     let layer = material.texture.layer() as usize;
     if layer >= texture.layers as usize {
         return None;
     }
+    let flat = overlay.textures[..shard]
+        .iter()
+        .map(|shard| shard.layers as usize)
+        .sum::<usize>()
+        + layer;
     let base = texture.mips.first()?;
-    let grid = overlay
-        .texture_source_grids
-        .get(layer)
-        .copied()
-        .unwrap_or(0);
-    let source_side = match overlay.texture_source_sizes.get(layer) {
+    let grid = overlay.texture_source_grids.get(flat).copied().unwrap_or(0);
+    let source_side = match overlay.texture_source_sizes.get(flat) {
         Some(size) => u32::from(*size.iter().max()?),
         None => base.size.checked_shr(u32::from(grid))?,
     };

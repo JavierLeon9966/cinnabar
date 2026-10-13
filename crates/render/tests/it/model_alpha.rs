@@ -67,34 +67,32 @@ fn displaced_models_preserve_opaque_texels_and_cutout_thresholds() {
             )
         );
         let bindings = if enhanced {
-            [4, 5]
+            material_shader::SAMPLED_TEXTURE_BINDINGS.to_vec()
         } else {
-            material_shader::NATIVE_LEAF_TEXTURE_BINDINGS
+            material_shader::NATIVE_LEAF_TEXTURE_BINDINGS.to_vec()
         };
+        let mut entries: Vec<wgpu::BindGroupEntry> = bindings
+            .iter()
+            .map(|binding| wgpu::BindGroupEntry {
+                binding: *binding,
+                resource: wgpu::BindingResource::TextureView(&view),
+            })
+            .collect();
+        entries.push(wgpu::BindGroupEntry {
+            binding: 6,
+            resource: wgpu::BindingResource::Sampler(&sampler),
+        });
+        entries.push(wgpu::BindGroupEntry {
+            binding: material_shader::NATIVE_LEAF_SAMPLER_BINDING,
+            resource: wgpu::BindingResource::Sampler(&sampler),
+        });
         let actual = gpu.render(
             &source,
             "alpha_vertex",
             &[Draw {
                 fragment: if shadow { "shadow_colour" } else { "fragment" },
                 vertices: 0..48,
-                bindings: &[
-                    wgpu::BindGroupEntry {
-                        binding: bindings[0],
-                        resource: wgpu::BindingResource::TextureView(&view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: bindings[1],
-                        resource: wgpu::BindingResource::TextureView(&view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 6,
-                        resource: wgpu::BindingResource::Sampler(&sampler),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: material_shader::NATIVE_LEAF_SAMPLER_BINDING,
-                        resource: wgpu::BindingResource::Sampler(&sampler),
-                    },
-                ],
+                bindings: &entries,
                 blend: None,
                 write_depth: true,
             }],
@@ -149,6 +147,18 @@ fn displaced_models_preserve_opaque_texels_and_cutout_thresholds() {
                 },
                 wgpu::BindGroupEntry {
                     binding: material_shader::NATIVE_LEAF_TEXTURE_BINDINGS[1],
+                    resource: wgpu::BindingResource::TextureView(&view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: material_shader::NATIVE_LEAF_TEXTURE_BINDINGS[2],
+                    resource: wgpu::BindingResource::TextureView(&view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: material_shader::NATIVE_LEAF_TEXTURE_BINDINGS[3],
+                    resource: wgpu::BindingResource::TextureView(&view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: material_shader::NATIVE_LEAF_TEXTURE_BINDINGS[4],
                     resource: wgpu::BindingResource::TextureView(&view),
                 },
                 wgpu::BindGroupEntry {

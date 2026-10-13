@@ -86,7 +86,7 @@ fn mixed_terrain_keeps_hd_dimensions_and_adjacent_detail_pixels() {
     let (view, blocks) = fixture(&images);
     let compiled = compile_block_overlay(&view, &blocks, false, None).unwrap();
     assert_eq!(compiled.gaps.missing_textures, 0);
-    let page = compiled.overlay.texture.as_ref().unwrap();
+    let page = compiled.overlay.textures.first().unwrap();
     assert_eq!(page.mips[0].size, 512);
     for (visual, (_, width, height)) in compiled.overlay.visuals.iter().zip(images) {
         let layer = compiled.overlay.materials[visual.faces[0] as usize]
@@ -115,7 +115,7 @@ fn tall_strips_retain_first_and_last_full_resolution_frames() {
         let animation = &compiled.overlay.animations[0];
         assert_eq!(animation.frame_count, height / width);
         assert_eq!(animation.ticks_per_frame, 2);
-        let page = compiled.overlay.texture.as_ref().unwrap();
+        let page = compiled.overlay.textures.first().unwrap();
         let layer_bytes = (width * width * 4) as usize;
         for frame in [0, animation.frame_count - 1] {
             let layer = compiled.overlay.animation_frames[frame as usize].layer() as usize;
@@ -143,7 +143,7 @@ fn over_budget_route_keeps_other_terrain_at_full_quality() {
         .collect::<Vec<_>>();
     let (view, blocks) = fixture(&borrowed);
     let compiled = compile_block_overlay(&view, &blocks, false, None).unwrap();
-    let page = compiled.overlay.texture.as_ref().unwrap();
+    let page = compiled.overlay.textures.first().unwrap();
     assert_eq!(page.mips[0].size, 512);
     assert!(
         page.mips.iter().map(|mip| mip.rgba8.len()).sum::<usize>()

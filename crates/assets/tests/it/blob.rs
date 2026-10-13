@@ -60,7 +60,7 @@ fn world_carrier_rejects_undefined_material_dispositions() {
 #[test]
 fn world_carrier_exact_bytes() {
     let texture = assets::TextureRef::new(1, 17).expect("bounded texture ref");
-    assert_eq!(texture.raw(), 0x8000_0011);
+    assert_eq!(texture.raw(), (1 << assets::TEXTURE_PAGE_SHIFT) | 17);
 
     let mut fixture = valid_assets();
     fixture.visuals = vec![
@@ -148,6 +148,11 @@ fn world_carrier_exact_bytes() {
     let bytes = encode_blob(&fixture).expect("encode every world carrier table");
     assert_eq!(bytes.len(), 1_576_352);
     assert_eq!(
+        &bytes[..8],
+        b"MCBEAS18",
+        "the page-bit carrier schema bumped the blob version"
+    );
+    assert_eq!(
         format!("{:x}", Sha256::digest(&bytes)),
         "953376201ef131c55f2f0659c9265572ea94408421440940d0ee3ed39ade7f96",
         "the complete every-table fixture is the byte-exact world carrier golden"
@@ -175,7 +180,7 @@ fn world_carrier_exact_bytes() {
     );
     assert_eq!(
         read_u32(&bytes, materials + assets::MATERIAL_BYTES),
-        0x8000_0000
+        (1 << assets::TEXTURE_PAGE_SHIFT) | 0
     );
     assert_eq!(read_u32(&bytes, templates + 4), 1);
     assert_eq!(read_u32(&bytes, quads + 40), 1);
@@ -187,7 +192,10 @@ fn world_carrier_exact_bytes() {
         read_u32(&bytes, animations + 24),
         assets::ANIMATION_FLAG_BLEND
     );
-    assert_eq!(read_u32(&bytes, frames + 4), 0x8000_0000);
+    assert_eq!(
+        read_u32(&bytes, frames + 4),
+        (1 << assets::TEXTURE_PAGE_SHIFT) | 0
+    );
     let runtime = assets::RuntimeAssets::decode(&bytes).expect("decode exact fixture");
     assert_eq!(runtime.model_quads(), fixture.model_quads.as_ref());
     assert_eq!(runtime.animations(), fixture.animations.as_ref());
@@ -286,7 +294,13 @@ fn mcbeas04_rejects_overlapping_pages() {
 #[test]
 fn mcbeas04_rejects_bad_texture_ref() {
     assert!(assets::TextureRef::from_raw(0x0010_0000).is_err());
-    assert!(assets::TextureRef::new(2, 0).is_err());
+    assert!(assets::TextureRef::new(assets::MAX_TEXTURE_PAGES as u32, 0).is_err());
+    assert!(
+        assets::TextureRef::from_raw(
+            (assets::MAX_TEXTURE_PAGES as u32) << assets::TEXTURE_PAGE_SHIFT
+        )
+        .is_err()
+    );
     let last = assets::MAX_TEXTURE_LAYERS as u32 - 1;
     for page in 0..assets::MAX_TEXTURE_PAGES as u32 {
         let reference = assets::TextureRef::new(page, last).unwrap();

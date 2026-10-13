@@ -38,6 +38,8 @@ const FULL_BLOCK: &str = "minecraft:geometry.full_block";
 const FULL_BLOCK_V1: &str = "minecraft:geometry.full_block_v1";
 const MIN_TILE: u32 = assets::TILE_SIZE;
 const MAX_OVERLAY_LAYERS: usize = assets::MAX_TEXTURE_LAYERS;
+/// Base carrier page plus this many overlay shards fill [`MAX_TEXTURE_PAGES`].
+const MAX_OVERLAY_SHARDS: usize = 4;
 const DIAGNOSTIC_MATERIAL: u32 = 0;
 
 /// Counted reasons some server block visuals are incomplete this session.
@@ -89,15 +91,19 @@ pub(super) fn compile_block_overlay(
         .filter_map(|components| components.geometry.as_deref())
         .filter(|identifier| !identifier.starts_with("minecraft:"))
         .collect::<HashSet<_>>();
+    let max_layers = (max_texture_array_layers as usize).min(MAX_OVERLAY_LAYERS);
     let mut builder = Builder {
         catalog: TextureCatalog::new(view, vanilla_keys),
         geometries: geometry_catalog(view, &wanted),
-        overlay: BlockOverlay::default(),
+        overlay: BlockOverlay {
+            max_page_layers: max_layers as u32,
+            ..BlockOverlay::default()
+        },
         sources: Vec::new(),
         source_bytes: 0,
         tile_size: MIN_TILE,
         texture_policy: device_policy(),
-        max_layers: (max_texture_array_layers as usize).min(MAX_OVERLAY_LAYERS),
+        max_layers,
         textures: HashMap::new(),
         materials: HashMap::new(),
         visuals: HashMap::new(),
@@ -172,8 +178,10 @@ enum Source {
     GridImage(DecodedTexture, u8),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 struct TextureSlot {
+    /// Overlay page one holds the first shard; large palettes spill into more.
+    page: u32,
     layer: u32,
     animation: u32,
 }
@@ -212,7 +220,7 @@ impl Builder<'_> {
                 if material != DIAGNOSTIC_MATERIAL && claimed.insert(material) {
                     self.overlay.material_overrides.push(MaterialOverride {
                         material,
-                        texture: TextureRef::new(1, slot.layer).expect("bounded layer"),
+                        texture: TextureRef::new(slot.page, slot.layer).expect("bounded layer"),
                         animation: slot.animation,
                     });
                 }
@@ -465,7 +473,7 @@ impl Builder<'_> {
         };
         let material = self.overlay.materials.len() as u32;
         self.overlay.materials.push(Material {
-            texture: TextureRef::new(1, slot.layer).expect("bounded layer"),
+            texture: TextureRef::new(slot.page, slot.layer).expect("bounded layer"),
             flags,
             animation: slot.animation,
             ..assets::Material::unvaried()
@@ -483,15 +491,25 @@ impl Builder<'_> {
         slot
     }
 
+    /// Admits one texture as a run of layers in the first shard with room.
+    /// Layers are budgeted per shard while bytes stay global, so a palette
+    /// larger than one device array splits into pages without changing the
+    /// memory policy. The first shard also carries the diagnostic layer.
     fn load_texture(&mut self, key: &str) -> Option<TextureSlot> {
-        let available = self.max_layers.saturating_sub(self.sources.len());
-        if available == 0 {
-            // A full array rejects every later route, so name it rather than
-            // leaving those textures indistinguishable from unusable pack data.
+        if self.max_layers == 0 {
             self.gaps.saturated_textures += 1;
             self.catalog.report_full(key);
             return None;
         }
+        let shard = self.sources.len() / self.max_layers;
+        if shard >= MAX_OVERLAY_SHARDS {
+            // Every shard is full, so name the refused route rather than
+            // leaving it indistinguishable from unusable pack data.
+            self.gaps.saturated_textures += 1;
+            self.catalog.report_full(key);
+            return None;
+        }
+        let available = self.max_layers - self.sources.len() % self.max_layers;
         let mut texture = self.catalog.decode(key)?;
         let grid = self.catalog.grid(key);
         if self.catalog.flipbook(key).is_none() {
@@ -546,6 +564,9 @@ impl Builder<'_> {
         self.source_bytes += added_bytes;
         let first = self.sources.len() as u32;
         let frame_count = frames.len() as u32;
+        // Frames were capped at the shard remainder, so this run never
+        // crosses the page `finish` cuts at the same stride.
+        let page = first / self.max_layers as u32 + 1;
         self.sources.extend(frames.into_iter().map(|frame| {
             if grid == 0 {
                 Source::Image(frame)
@@ -556,10 +577,10 @@ impl Builder<'_> {
         let animation = match self.catalog.flipbook(key) {
             Some(flipbook) if frame_count > 1 => {
                 let frame_start = self.overlay.animation_frames.len() as u32;
-                for layer in first..first + frame_count {
+                for layer in (first % self.max_layers as u32)..(first % self.max_layers as u32 + frame_count) {
                     self.overlay
                         .animation_frames
-                        .push(TextureRef::new(1, layer).expect("bounded layer"));
+                        .push(TextureRef::new(page, layer).expect("bounded layer"));
                 }
                 self.overlay.animations.push(Animation {
                     frame_start,
@@ -575,7 +596,8 @@ impl Builder<'_> {
             _ => NO_ANIMATION,
         };
         Some(TextureSlot {
-            layer: first,
+            page,
+            layer: first % self.max_layers as u32,
             animation,
         })
     }
@@ -644,11 +666,35 @@ impl Builder<'_> {
                 size = (size / 2).max(1);
                 mip
             })
-            .collect();
-        self.overlay.texture = Some(TextureArray {
-            layers: self.sources.len() as u32,
-            mips,
-        });
+            .collect::<Vec<_>>();
+        // Cut the flat layer stream into per-page shards. One array-sized
+        // palette still yields exactly one shard, so this only splits when the
+        // device's array limit forced `load_texture` onto another page.
+        let shards = self.sources.len().div_ceil(self.max_layers).max(1);
+        let stride = self.max_layers;
+        for shard in 0..shards {
+            let end = if shard + 1 == shards {
+                self.sources.len()
+            } else {
+                ((shard + 1) * stride).min(self.sources.len())
+            };
+            self.overlay.textures.push(TextureArray {
+                layers: (end - shard * stride) as u32,
+                mips: mips
+                    .iter()
+                    .map(|mip| {
+                        let layer_bytes = (mip.size * mip.size * 4) as usize;
+                        TextureMip {
+                            size: mip.size,
+                            rgba8: mip.rgba8[shard * stride * layer_bytes..end * layer_bytes]
+                                .to_vec()
+                                .into_boxed_slice(),
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice(),
+            });
+        }
         Some(CompiledBlockOverlay {
             overlay: self.overlay,
             gaps: self.gaps,
