@@ -8423,11 +8423,9 @@ limited to base blocks.
 ## Cubeless server geometry draws nothing
 
 Server packs pair a cubeless geometry with a null texture to hide a block
-state (furniture anchors, empty vessels). The overlay compiler previously
-degraded those states to the diagnostic look; a geometry with no cubes now
-compiles to the invisible visual with no gap counted, matching the native
-empty render. The bone-visibility path is unchanged: fully hidden bones
-already returned invisible. A regression covers an identifier-only geometry
-in both hashed and palette sessions, asserting the invisible kind, clean
-gaps, and session application. The test fails on the previous
-implementation, which returned diagnostic.
+state (furniture anchors, empty vessels). The overlay compiler renders
+cubeless geometry invisible with no gap counted. Geometry emptied by
+rejected cubes keeps the diagnostic visual and its skipped-cube count.
+Fully hidden valid cubes still return invisible, even if another cube was
+rejected. Regressions cover all three cases in hashed and palette sessions,
+including visual support, gap counts, and session application.
