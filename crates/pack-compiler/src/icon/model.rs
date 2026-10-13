@@ -217,10 +217,16 @@ fn tile(parts: Parts<'_>, id: u32) -> Result<(&[u8], usize, bool, f32), Reject> 
     let material = &parts.materials[id as usize];
     let grid = match parts.textures {
         Textures::World(_) => 0,
-        Textures::Overlay(_, grids) => grids
-            .get(material.texture.layer() as usize)
-            .copied()
-            .unwrap_or(0),
+        Textures::Overlay(shards, grids) => {
+            // Source grids are flat across the concatenated shards.
+            let shard = material.texture.page().checked_sub(1).unwrap_or(0) as usize;
+            let flat = shards[..shard.min(shards.len())]
+                .iter()
+                .map(|shard| shard.layers as usize)
+                .sum::<usize>()
+                + material.texture.layer() as usize;
+            grids.get(flat).copied().unwrap_or(0)
+        }
     };
     if side
         .checked_shr(u32::from(grid))

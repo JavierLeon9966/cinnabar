@@ -110,7 +110,7 @@ fn grid_raster(gpu: &Gpu, model: bool, enhanced: bool, samples: u32) -> Vec<u8> 
     for (page, view) in views.iter().enumerate() {
         bindings.push(wgpu::BindGroupEntry {
             binding: if enhanced {
-                4 + page as u32
+                crate::material_shader::SAMPLED_TEXTURE_BINDINGS[page]
             } else {
                 crate::material_shader::NATIVE_LEAF_TEXTURE_BINDINGS[page]
             },
