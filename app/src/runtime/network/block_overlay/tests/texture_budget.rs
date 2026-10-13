@@ -81,8 +81,8 @@ fn a_full_texture_budget_names_the_routes_it_refused() {
     };
     // Four shards of 256 layers cannot hold the whole fixture, so the fifth
     // shard's routes are refused and named instead of degrading silently.
-    let compiled =
-        super::super::compile_block_overlay(&view, &blocks, false, None, 256).expect("overlay");
+    let compiled = super::super::compile_block_overlay(&view, &blocks, false, None, 256, None)
+        .expect("overlay");
     let layers: u32 = compiled
         .overlay
         .textures

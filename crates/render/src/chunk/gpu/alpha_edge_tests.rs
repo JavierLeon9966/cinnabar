@@ -197,7 +197,6 @@ fn render_edge(gpu: &Gpu, held: bool, samples: u32, back: bool) -> Vec<u8> {
         );
         entries.push(buffer_entry(27, &lightmap));
         entries
-
     } else {
         vec![
             buffer_entry(0, &camera),

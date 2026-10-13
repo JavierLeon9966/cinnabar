@@ -149,7 +149,7 @@ fn world_carrier_exact_bytes() {
     assert_eq!(bytes.len(), 1_576_352);
     assert_eq!(
         &bytes[..8],
-        b"MCBEAS18",
+        &BLOB_MAGIC,
         "the page-bit carrier schema bumped the blob version"
     );
     assert_eq!(
@@ -180,7 +180,7 @@ fn world_carrier_exact_bytes() {
     );
     assert_eq!(
         read_u32(&bytes, materials + assets::MATERIAL_BYTES),
-        (1 << assets::TEXTURE_PAGE_SHIFT) | 0
+        1 << assets::TEXTURE_PAGE_SHIFT
     );
     assert_eq!(read_u32(&bytes, templates + 4), 1);
     assert_eq!(read_u32(&bytes, quads + 40), 1);
@@ -194,7 +194,7 @@ fn world_carrier_exact_bytes() {
     );
     assert_eq!(
         read_u32(&bytes, frames + 4),
-        (1 << assets::TEXTURE_PAGE_SHIFT) | 0
+        1 << assets::TEXTURE_PAGE_SHIFT
     );
     let runtime = assets::RuntimeAssets::decode(&bytes).expect("decode exact fixture");
     assert_eq!(runtime.model_quads(), fixture.model_quads.as_ref());
@@ -853,6 +853,19 @@ fn read_u32(bytes: &[u8], offset: usize) -> u32 {
 
 fn read_u64(bytes: &[u8], offset: usize) -> u64 {
     u64::from_le_bytes(bytes[offset..offset + 8].try_into().expect("u64 bytes"))
+}
+
+#[test]
+fn world_carrier_rejects_the_previous_page_encoding_at_the_header() {
+    let mut bytes = encode_blob(&valid_assets()).unwrap().into_vec();
+    // Version 18 used a different page field and must fail before reference validation.
+    bytes[..8].copy_from_slice(b"MCBEAS18");
+    bytes[8..12].copy_from_slice(&18_u32.to_le_bytes());
+    let payload_length = bytes.len() - 32;
+    let digest = Sha256::digest(&bytes[..payload_length]);
+    bytes[payload_length..].copy_from_slice(&digest);
+    assert!(matches!(assets::RuntimeAssets::decode(&bytes),
+        Err(AssetError::InvalidCompiledAssets { detail }) if detail == "invalid world asset magic"));
 }
 
 #[test]

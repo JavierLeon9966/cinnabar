@@ -1,4 +1,7 @@
 mod decode;
+mod face_overrides;
+#[cfg(test)]
+mod geometry_tests;
 mod id_remap;
 mod overlay;
 mod server_defined_blocks;
@@ -145,7 +148,6 @@ pub struct RuntimeAssets {
     texture_pages: Box<[TexturePage]>,
     overlay_texture_source_sizes: Box<[[u16; 2]]>,
     overlay_texture_source_grids: Box<[u8]>,
-    overlay_texture_shards: Box<[TextureArray]>,
     /// Flat layer counts of each shard, so a shard-local layer maps to the
     /// per-layer source arrays without a stored start table.
     overlay_page_layer_counts: Box<[usize]>,
@@ -197,7 +199,6 @@ impl RuntimeAssets {
                 .into_boxed_slice(),
             overlay_texture_source_sizes: Box::new([]),
             overlay_texture_source_grids: Box::new([]),
-            overlay_texture_shards: Box::new([]),
             overlay_page_layer_counts: Box::new([]),
             biomes: CompiledBiomeAssets::diagnostic(),
             provenance: BlobProvenance::ZEROED,
@@ -226,7 +227,7 @@ impl RuntimeAssets {
         )
     }
 
-    /// Texture pixels and animation frames do not change the mesh's material addresses.
+    /// Mesh reuse requires matching material addresses, flags, and positional variation mode.
     pub fn has_same_geometry(&self, other: &Self) -> bool {
         self.visuals == other.visuals
             && self.hashed == other.hashed
@@ -238,7 +239,9 @@ impl RuntimeAssets {
                 .materials
                 .iter()
                 .zip(other.materials.iter())
-                .all(|(a, b)| a.flags == b.flags)
+                .all(|(a, b)| {
+                    a.flags == b.flags && (a.variation_count > 1) == (b.variation_count > 1)
+                })
     }
 
     /// Source pixel dimensions of the shard a reference names, or the base
@@ -439,8 +442,9 @@ impl RuntimeAssets {
     /// Overlay texture shards appended after the base carrier's page, in
     /// reference page order (page 1 first). Vanilla carriers decode none.
     #[must_use]
-    pub fn texture_shards(&self) -> &[TextureArray] {
-        &self.overlay_texture_shards
+    pub fn texture_shards(&self) -> impl ExactSizeIterator<Item = &TextureArray> {
+        let first = self.texture_pages.len() - self.overlay_page_layer_counts.len();
+        self.texture_pages[first..].iter().map(|page| &page.texture)
     }
     /// Layer count of each overlay shard, parallel to the shards.
     #[must_use]

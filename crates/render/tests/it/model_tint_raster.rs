@@ -151,7 +151,11 @@ fn material_words() -> Vec<u32> {
     (0..CASE_COUNT)
         .flat_map(|index| {
             [
-                if index % 2 == 0 { 0 } else { 1 << 31 },
+                if index % 2 == 0 {
+                    0
+                } else {
+                    1 << assets::TEXTURE_PAGE_SHIFT
+                },
                 flags[index % COLUMNS] | assets::MATERIAL_FLAG_ALPHA_CUTOUT,
                 if index % 3 == 0 {
                     0

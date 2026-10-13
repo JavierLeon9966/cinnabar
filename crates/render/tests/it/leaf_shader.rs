@@ -101,7 +101,8 @@ fn alternate_atlas_views_and_native_sampler_fit_baseline_limits_without_more_sto
     assert!(uploader.contains("format: TextureFormat::Rgba8UnormSrgb"));
     assert!(uploader.contains("native world leaf atlas view"));
     assert!(
-        uploader.contains("for (index, (texture, plans)) in terrain_pages.iter().zip(upload_plans)")
+        uploader
+            .contains("for (index, (texture, plans)) in terrain_pages.iter().zip(upload_plans)")
     );
     assert_eq!(uploader.matches("render_device.create_texture(").count(), 1);
     assert!(uploader.contains("crate::material_shader::native_leaf_sampler_descriptor()"));

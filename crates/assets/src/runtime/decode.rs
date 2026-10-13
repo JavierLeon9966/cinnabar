@@ -67,7 +67,6 @@ impl RuntimeAssets {
             texture_pages: decode_pages(sections[8], &page_meta)?,
             overlay_texture_source_sizes: Box::new([]),
             overlay_texture_source_grids: Box::new([]),
-            overlay_texture_shards: Box::new([]),
             overlay_page_layer_counts: Box::new([]),
             biomes,
             provenance,
