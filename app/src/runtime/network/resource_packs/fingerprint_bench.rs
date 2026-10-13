@@ -258,9 +258,9 @@ fn join_part_timing() {
             view,
             &Default::default(),
             false,
-            BASE_MATERIAL_KEYS.get(),
-            BASE_MATERIALS.get().map(Vec::as_slice),
+            BASE_MATERIAL_KEYS.get().map(|(keys, _)| keys),
             overlay_texture_layer_limit(),
+            base_world_assets(),
         );
     });
     time("icons", &|view| {

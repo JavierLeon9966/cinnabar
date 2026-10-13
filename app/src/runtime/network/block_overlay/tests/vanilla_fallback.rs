@@ -34,30 +34,58 @@ fn base_materials() -> Vec<assets::Material> {
     ]
 }
 
-fn oak_keys() -> assets::MaterialKeys {
-    assets::MaterialKeys::from_entries([(1, "oak_planks")])
+/// Encodes a small base carrier with static materials and one texture layer.
+fn base() -> RuntimeAssets {
+    let diagnostic = RuntimeAssets::diagnostic();
+    let compiled = assets::CompiledAssets {
+        visuals: vec![super::super::diagnostic_visual()].into(),
+        light_properties: vec![assets::LightProperties::OPAQUE_DARK].into(),
+        hashed: Box::new([]),
+        materials: base_materials().into(),
+        model_templates: Box::new([]),
+        model_quads: Box::new([]),
+        animations: Box::new([]),
+        animation_frames: Box::new([]),
+        texture_pages: diagnostic.texture_pages().to_vec().into(),
+        biomes: assets::CompiledBiomeAssets::diagnostic(),
+        provenance: assets::BlobProvenance {
+            source_manifest_sha256: [1; 32],
+            block_registry_sha256: [2; 32],
+            light_registry_sha256: [3; 32],
+            biome_registry_sha256: [4; 32],
+        },
+    };
+    RuntimeAssets::decode(&assets::encode_blob(&compiled).unwrap()).unwrap()
+}
+
+/// Keys for the base oak texture, absent from the server fixture.
+fn oak_keys() -> assets::material_keys::MaterialKeys {
+    assets::material_keys::MaterialKeys::from_entries([(1, "oak_planks")])
         .with_aliases([("oak_planks", "textures/blocks/oak_planks")])
 }
 
-fn keys() -> assets::MaterialKeys {
-    assets::MaterialKeys::from_entries([(1, "oak_planks"), (2, "lucky")]).with_aliases([
-        ("oak_planks", "textures/blocks/oak_planks"),
-        ("lucky", "textures/blocks/lucky"),
-    ])
+/// Base keys for both an absent raster and one shipped by the server fixture.
+fn keys() -> assets::material_keys::MaterialKeys {
+    assets::material_keys::MaterialKeys::from_entries([(1, "oak_planks"), (2, "lucky")])
+        .with_aliases([
+            ("oak_planks", "textures/blocks/oak_planks"),
+            ("lucky", "textures/blocks/lucky"),
+        ])
 }
 
+/// Compiles custom blocks with matching base materials and texture keys.
 fn compile(
     blocks: &CustomBlocks,
-    keys: Option<&assets::MaterialKeys>,
+    keys: Option<&assets::material_keys::MaterialKeys>,
 ) -> super::super::CompiledBlockOverlay {
-    let base = base_materials();
+    let base = base();
     super::super::compile_block_overlay(
         &view(),
         blocks,
         false,
         keys,
-        Some(&base),
         assets::MAX_TEXTURE_LAYERS as u32,
+        Some(&base),
     )
     .expect("overlay")
 }

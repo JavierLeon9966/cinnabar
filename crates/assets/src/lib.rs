@@ -33,11 +33,11 @@ mod glyph_sheet;
 pub mod gui_item;
 mod hud;
 pub mod hud_extras;
-mod icon;
+pub mod icon;
 pub mod item;
 mod lang;
 mod light_registry;
-mod material_keys;
+pub mod material_keys;
 mod material_variations;
 mod model;
 pub mod native_material;
@@ -60,7 +60,7 @@ mod sound_events;
 mod stair;
 pub mod starter_skins;
 pub mod texture;
-mod ui;
+pub mod ui;
 pub mod vanilla_pack;
 mod vanilla_refs;
 pub mod weather_textures;
@@ -217,7 +217,6 @@ pub use lang::{
     VANILLA_EN_US_LANG_SHA256, encode_lang_catalog, is_language_code,
 };
 pub use light_registry::{LightProperties, read_light_registry, read_light_registry_for_protocol};
-pub use material_keys::{MATERIAL_KEYS_SCHEMA, MAX_MATERIAL_KEYS_BYTES, MaterialKeys};
 pub use model::{
     ANIMATION_FLAG_BLEND, Animation, BLOCK_VISUAL_VARIANT_COVERED_GRASS,
     BLOCK_VISUAL_VARIANT_MATERIAL_MASK, BLOCK_VISUAL_VARIANT_NONSEASONAL_LEAF,
