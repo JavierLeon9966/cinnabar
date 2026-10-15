@@ -208,6 +208,11 @@ fn produce_use(
             .predicted_selection(&server, inventory_revision.unwrap_or(0))
             .unwrap_or(server)
     });
+    runtime.observe_book_init(writable_book_needs_init(
+        &selection,
+        air_use,
+        context.ui.inventory_ledger(&player_runtime),
+    ));
     let frame = UseFrame {
         tick: sample.tick,
         now_millis,
@@ -305,6 +310,32 @@ fn admit_with_action_aim(
         );
         movement.hold_release_after_tick(frame.tick, packets);
     }
+}
+
+/// Whether the selected stack is a fresh writable book BDS only edits after
+/// an air use that carries an empty `pages` list.
+fn writable_book_needs_init(
+    selection: &Option<gameplay::mining::FrozenMiningSelection>,
+    air_use: Option<AirUse>,
+    ledger: &inventory::PlayerInventoryLedger,
+) -> bool {
+    if air_use.is_some() {
+        return false;
+    }
+    let Some(selection) = selection.as_ref() else {
+        return false;
+    };
+    if selection.item.is_empty() || !protocol::book_needs_init(selection.item.extra_data()) {
+        return false;
+    }
+    ledger
+        .negotiated_item_entry(selection.item.network_id())
+        .and_then(|entry| {
+            assets::facts::ItemFacts::builtin()
+                .ok()
+                .and_then(|facts| facts.book_editable(&entry.identifier))
+        })
+        .unwrap_or(false)
 }
 
 #[cfg(test)]

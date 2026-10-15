@@ -836,3 +836,41 @@ fn delay_fix_admits_once_per_tick_and_session_reset_restores_rearm() {
     runtime.observe_press(true);
     assert!(!runtime.step(&next).swung);
 }
+
+/// A fresh writable book sends its empty-pages init instead of a plain use.
+#[test]
+fn fresh_book_init_sends_empty_pages_with_legacy_request() {
+    let book = stack(2, 386, 1);
+    assert!(protocol::book_needs_init(book.item.extra_data()));
+    let frame = UseFrame {
+        air_use: None,
+        selection: Some(book),
+        ..frame(100, true)
+    };
+    let mut runtime = ItemUseRuntime::default();
+    runtime.observe_press(true);
+    runtime.observe_book_init(true);
+    let outcome = runtime.step(&frame);
+    assert_eq!(kinds(&outcome), ["use"]);
+    let observed = observe_transaction(&outcome.packets[0]).expect("item use");
+    assert_eq!(observed.actions.len(), 1);
+    assert!(!protocol::book_needs_init(
+        &observed.actions[0].to_item.user_data
+    ));
+    assert_ne!(
+        observed.legacy_request_id, 0,
+        "the init carries a legacy request"
+    );
+    // An initialised book falls back to a plain use.
+    let mut runtime = ItemUseRuntime::default();
+    runtime.observe_press(true);
+    runtime.observe_book_init(false);
+    let outcome = runtime.step(&frame);
+    assert_eq!(kinds(&outcome), ["use"]);
+    assert!(
+        observe_transaction(&outcome.packets[0])
+            .expect("item use")
+            .actions
+            .is_empty()
+    );
+}
