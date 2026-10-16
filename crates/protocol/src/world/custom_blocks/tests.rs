@@ -728,3 +728,127 @@ fn large_server_stacks_admit_every_state() {
     );
     assert_eq!(admitted.total_states(), 70_000);
 }
+
+// The connection trait enables four neighbor-derived booleans that read as
+// ordinary block states, so fence permutations and bone visibility resolve
+// per palette state instead of staying unevaluated.
+#[test]
+fn connection_trait_group_expands_to_sixteen_states() {
+    let root = compound(vec![(
+        "traits",
+        Nbt::List(vec![trait_nbt(
+            "minecraft:connection",
+            &[("minecraft:cardinal_connections", 1)],
+        )]),
+    )]);
+    let definition = super::parse_definition(&root).expect("definition");
+    assert_eq!(definition.state_count, 16);
+    assert!(!definition.visual.state_identity_incomplete);
+    let block = custom_block("test:fence", &root);
+    let names: Vec<_> = block
+        .visual
+        .state_axes
+        .iter()
+        .map(|axis| axis.name.as_ref())
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "minecraft:connection_north",
+            "minecraft:connection_east",
+            "minecraft:connection_south",
+            "minecraft:connection_west",
+        ]
+    );
+    let (n, e, s, w) = (
+        "minecraft:connection_north",
+        "minecraft:connection_east",
+        "minecraft:connection_south",
+        "minecraft:connection_west",
+    );
+    // North varies fastest, then east, south, west.
+    expect_state(
+        &block,
+        0,
+        &[(n, "false"), (e, "false"), (s, "false"), (w, "false")],
+    );
+    expect_state(
+        &block,
+        1,
+        &[(n, "true"), (e, "false"), (s, "false"), (w, "false")],
+    );
+    expect_state(
+        &block,
+        2,
+        &[(n, "false"), (e, "true"), (s, "false"), (w, "false")],
+    );
+    expect_state(
+        &block,
+        15,
+        &[(n, "true"), (e, "true"), (s, "true"), (w, "true")],
+    );
+}
+
+// Individually enabled directions expand the same way as the group state.
+#[test]
+fn individually_enabled_connection_directions_expand_to_axes() {
+    let root = compound(vec![(
+        "traits",
+        Nbt::List(vec![trait_nbt(
+            "minecraft:connection",
+            &[
+                ("connection_north", 1),
+                ("connection_east", 1),
+                ("connection_south", 1),
+                ("connection_west", 1),
+            ],
+        )]),
+    )]);
+    let definition = super::parse_definition(&root).expect("definition");
+    assert_eq!(definition.state_count, 16);
+    assert!(!definition.visual.state_identity_incomplete);
+}
+
+// Connection axes join placement trait states before custom properties.
+#[test]
+fn connection_axes_follow_placement_traits_and_precede_properties() {
+    let root = compound(vec![
+        (
+            "traits",
+            Nbt::List(vec![
+                trait_nbt(
+                    "minecraft:placement_direction",
+                    &[("cardinal_direction", 1)],
+                ),
+                trait_nbt("minecraft:connection", &[("cardinal_connections", 1)]),
+            ]),
+        ),
+        (
+            "properties",
+            Nbt::List(vec![compound(vec![
+                ("enum", Nbt::List(vec![Nbt::Byte(0), Nbt::Byte(1)])),
+                ("name", text("test:lit")),
+            ])]),
+        ),
+    ]);
+    let definition = super::parse_definition(&root).expect("definition");
+    assert_eq!(definition.state_count, 4 * 16 * 2);
+    assert!(!definition.visual.state_identity_incomplete);
+    let names: Vec<_> = definition
+        .visual
+        .state_axes
+        .iter()
+        .map(|axis| axis.name.as_ref())
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "minecraft:cardinal_direction",
+            "minecraft:connection_north",
+            "minecraft:connection_east",
+            "minecraft:connection_south",
+            "minecraft:connection_west",
+            "test:lit",
+        ]
+    );
+}
