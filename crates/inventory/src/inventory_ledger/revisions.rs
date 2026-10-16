@@ -263,7 +263,8 @@ mod tests {
             if pending {
                 ledger.begin_world_drop(2, None).unwrap();
             } else {
-                change.from = change.from.renamed(change.from.stack_network_id() + 1);
+                let other_stack_id = change.from.stack_network_id() + 1;
+                change.from = change.from.renamed(other_stack_id);
                 change =
                     protocol::writable_book_init_change(&change.from, change.legacy_request_id)
                         .unwrap();
