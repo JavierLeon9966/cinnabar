@@ -108,3 +108,79 @@ fn creative_to_survival_keeps_abilities_but_stops_instant_destruction() {
     assert!(runtime.apply_game_mode_update(GameModeUpdate::Explicit(Creative)));
     assert!(runtime.game_mode_capabilities().unwrap().instant_break);
 }
+
+/// NoClip and spectator-layer Flying run spectator movement outside spectator mode.
+#[test]
+fn noclip_and_spectator_layer_flying_force_spectator_movement() {
+    use crate::game_mode_capabilities::{SPECTATOR_LAYER_TYPE, ability_bit};
+    use protocol::PlayerGameMode::{Spectator, Survival};
+
+    fn freecam(owner: i64) -> AbilitiesUpdate {
+        let base_bits = ability_bit::MAY_FLY | ability_bit::FLYING | ability_bit::NO_CLIP;
+        AbilitiesUpdate {
+            actor_unique_id: owner,
+            player_permission: -1,
+            command_permission: 255,
+            layers: AbilityLayersEvidence::Received(
+                [
+                    AbilityLayerEvidence {
+                        layer_type: 1,
+                        abilities: base_bits,
+                        values: base_bits,
+                        fly_speed_bits: 0,
+                        vertical_fly_speed_bits: 0,
+                        walk_speed_bits: 0,
+                    },
+                    AbilityLayerEvidence {
+                        layer_type: SPECTATOR_LAYER_TYPE,
+                        abilities: ability_bit::FLYING,
+                        values: ability_bit::FLYING,
+                        fly_speed_bits: 0,
+                        vertical_fly_speed_bits: 0,
+                        walk_speed_bits: 0,
+                    },
+                ]
+                .into(),
+            ),
+        }
+    }
+
+    // Survival without abilities walks.
+    let mut runtime = LocalPlayerFacts::new(7);
+    runtime.publish_bootstrap_game_modes(Survival, Survival, false);
+    assert!(!runtime.spectator_movement());
+    // Freecam shape noclips and forces flight like spectator.
+    runtime.bind_local_abilities(7, 4, 17, true);
+    runtime.apply_local_abilities(7, 4, 1, freecam(17));
+    assert!(!runtime.game_mode_capabilities().unwrap().has_collision);
+    assert!(runtime.game_mode_capabilities().unwrap().spectator_flight);
+    assert!(runtime.spectator_movement());
+    // Spectator mode always runs spectator movement.
+    let mut spectator = LocalPlayerFacts::new(7);
+    spectator.publish_bootstrap_game_modes(Spectator, Spectator, false);
+    assert!(spectator.spectator_movement());
+    // Base-layer NoClip alone still noclips like spectator.
+    let mut noclip = LocalPlayerFacts::new(7);
+    noclip.publish_bootstrap_game_modes(Survival, Survival, false);
+    noclip.bind_local_abilities(7, 4, 17, true);
+    noclip.apply_local_abilities(
+        7,
+        4,
+        1,
+        AbilitiesUpdate {
+            layers: AbilityLayersEvidence::Received(
+                [AbilityLayerEvidence {
+                    layer_type: 1,
+                    abilities: ability_bit::NO_CLIP,
+                    values: ability_bit::NO_CLIP,
+                    fly_speed_bits: 0,
+                    vertical_fly_speed_bits: 0,
+                    walk_speed_bits: 0,
+                }]
+                .into(),
+            ),
+            ..update(17, 0)
+        },
+    );
+    assert!(noclip.spectator_movement());
+}

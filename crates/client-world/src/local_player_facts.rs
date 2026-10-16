@@ -168,6 +168,21 @@ impl LocalPlayerFacts {
             .map(|mode| GameModeCapabilities::resolve(mode, self.local_abilities()))
     }
 
+    /// Whether local movement runs the spectator path (forced flight without
+    /// terrain collision).
+    ///
+    /// True for spectator mode, for a NoClip ability grant (no collision like
+    /// spectator), and for a spectator-layer Flying grant (forced flight like
+    /// spectator, freecam/noclip shape).
+    #[must_use]
+    pub fn spectator_movement(&self) -> bool {
+        if self.player_game_mode == Some(PlayerGameMode::Spectator) {
+            return true;
+        }
+        self.game_mode_capabilities()
+            .is_some_and(|caps| !caps.has_collision || caps.spectator_flight)
+    }
+
     /// Keeps the existing survival-stat visibility default while the mode is unknown.
     #[must_use]
     pub const fn survival_stats_visible(&self) -> bool {

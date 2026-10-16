@@ -69,7 +69,9 @@ pub fn read(
             .contains(assets::facts::ItemTraits::POWDER_SNOW_WALKER);
     let capabilities = player.facts.game_mode_capabilities();
     let can_fly = capabilities.is_some_and(|capabilities| capabilities.can_fly);
-    let spectator = player.facts.player_game_mode() == Some(protocol::PlayerGameMode::Spectator);
+    // NoClip removes collision like spectator movement, and a spectator-layer
+    // Flying grant forces flight like spectator mode (freecam/noclip shape).
+    let spectator = player.facts.spectator_movement();
     let hunger_exempt = can_fly || spectator;
     let hunger_below_floor = player.facts.hunger().map(|hunger| {
         u32::from(hunger.current()) <= u32::from(SPRINT_HUNGER_FLOOR) * u32::from(hunger.scale())
