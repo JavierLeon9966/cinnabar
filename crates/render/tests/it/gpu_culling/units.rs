@@ -1,6 +1,8 @@
 //! Ordinary indexed unit draws must keep the exact sealed direct-path pixels and depth ties.
 use super::*;
-use render_model::terrain_units::{QUADS_PER_UNIT, TerrainUnit, VisibleTerrainUnit, shards};
+use render_model::terrain_units::{
+    IndexedUnitPage, QUADS_PER_UNIT, TerrainUnit, UNITS_PER_INSTANCE, VisibleTerrainUnit, shards,
+};
 
 /// Adds T junctions, alpha-tested two-sided faces, a long stream and coincident depth ties.
 fn fixture() -> Terrain {
@@ -58,7 +60,7 @@ fn draw_units(
         CullStream::Solid => (&raster.solid, &raster.solid_group),
         _ => (&raster.cutout, &raster.cutout_group),
     };
-    let indices = (0..QUADS_PER_UNIT)
+    let indices = (0..QUADS_PER_UNIT * UNITS_PER_INSTANCE)
         .flat_map(|quad| chunk_constants::STATIC_QUAD_INDICES.map(|index| quad * 4 + index))
         .collect::<Vec<_>>();
     let index_buffer = gpu.words(&indices, wgpu::BufferUsages::INDEX);
@@ -72,10 +74,24 @@ fn draw_units(
         page_units * size_of::<VisibleTerrainUnit>() as u64,
     )
     .map(|range| {
-        let buffer = gpu.words(
-            bytemuck::cast_slice(&units[range.clone()]),
-            wgpu::BufferUsages::STORAGE,
-        );
+        // Reverse physical slots, then recover the original draw order through references.
+        let layout = IndexedUnitPage {
+            capacity: range.len(),
+        };
+        let mut words = vec![0; layout.byte_size() as usize / size_of::<u32>()];
+        words[..4].copy_from_slice(&layout.header(range.len() as u32));
+        let descriptors = units[range.clone()]
+            .iter()
+            .rev()
+            .copied()
+            .collect::<Vec<_>>();
+        let descriptor_words: &[u32] = bytemuck::cast_slice(&descriptors);
+        words[4..4 + descriptor_words.len()].copy_from_slice(descriptor_words);
+        let start = layout.reference_offset() as usize / size_of::<u32>();
+        for (index, slot) in (0..range.len() as u32).rev().enumerate() {
+            words[start + index] = slot;
+        }
+        let buffer = gpu.words(&words, wgpu::BufferUsages::STORAGE);
         (
             gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: None,
@@ -98,7 +114,11 @@ fn draw_units(
         pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         for (page, count) in &pages {
             pass.set_bind_group(2, page, &[]);
-            pass.draw_indexed(0..indices.len() as u32, 0, 0..*count);
+            pass.draw_indexed(
+                0..indices.len() as u32,
+                0,
+                0..count.div_ceil(UNITS_PER_INSTANCE),
+            );
         }
     }
     gpu.queue.submit([encoder.finish()]);
@@ -157,7 +177,7 @@ fn batched_direct_units_preserve_seams_cutout_tails_and_depth_precedence() {
                 .iter()
                 .any(|pixel| pixel != &expected[..4])
         );
-        for page_units in [2, u64::from(u32::MAX)] {
+        for page_units in [1, 2, 3, u64::from(u32::MAX)] {
             let actual_target = Target::new(&gpu, format, 1);
             for (stream, draws) in [CullStream::Solid, CullStream::Cutout]
                 .into_iter()

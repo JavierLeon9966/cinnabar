@@ -18,8 +18,6 @@ use crate::raw_packet::RawPacket;
 use crate::session_transport::{Inbound, SessionTransport, Terminal};
 use crate::{LoadingScreenPhase, Packet, ProtocolError, ServerTransferEvent, SessionError};
 
-/// Bounds the drain that surfaces a disconnect arriving with a failed startup write.
-const STARTUP_WRITE_FAILURE_DRAIN: Duration = Duration::from_secs(5);
 /// Bounds the bytes deferred to play while the spawn prerequisites arrive.
 pub(super) const MAX_DEFERRED_PACKET_BYTES: usize = 16 * 1024 * 1024;
 /// The view radius the client requests before it spawns.
@@ -154,6 +152,7 @@ pub(super) async fn await_spawn(
             }
         }
 
+        transport.accept_current();
         if start_game.is_some()
             && item_registry.is_some()
             && let Some(on_startup) = on_startup.take()
@@ -166,7 +165,7 @@ pub(super) async fn await_spawn(
         if !sent_chunk_radius && runtime_id.is_some() {
             if let Err(error) = transport.send(&loading_started()).await {
                 return Err(
-                    startup_write_failure(transport, error, STARTUP_WRITE_FAILURE_DRAIN).await,
+                    startup_write_failure(transport, error, super::WRITE_FAILURE_DRAIN).await,
                 );
             }
             sent_chunk_radius = true;

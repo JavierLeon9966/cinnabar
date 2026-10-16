@@ -27,6 +27,8 @@ pub use durability::resolve_item_durability;
 mod animation_tests;
 mod glint;
 mod grip;
+#[cfg(test)]
+mod presentation_tests;
 
 pub const MAX_ITEM_REGISTRY_RECORDS: usize = protocol::MAX_ITEM_REGISTRY_ENTRIES;
 pub const MAX_PENDING_ITEM_RESOLUTIONS: usize = 1_024;
@@ -132,8 +134,18 @@ pub enum EquipmentOutcome {
 
 type EquipmentKey = (ActorLifetimeId, ActorHandedness);
 
+/// Every hand that keys actor equipment. The match fails to compile when a hand is added, so
+/// keyed removal and lookup cannot silently miss one.
+const HANDS: [ActorHandedness; 2] = {
+    match ActorHandedness::Left {
+        ActorHandedness::Left | ActorHandedness::Right => {}
+    }
+    [ActorHandedness::Left, ActorHandedness::Right]
+};
+
 #[derive(Debug)]
 pub(crate) struct ItemStateStore {
+    presentation_generation: Arc<()>,
     assets: Option<Arc<RuntimeEntityAssets>>,
     registry: BTreeMap<i32, CanonicalItemRegistryRecord>,
     facts: inventory::SessionItemFacts,
@@ -152,6 +164,11 @@ pub(crate) struct ItemStateStore {
 }
 
 impl ItemStateStore {
+    /// Retains this store's registry identity independently of its address.
+    pub(crate) fn presentation_generation(&self) -> &Arc<()> {
+        &self.presentation_generation
+    }
+
     pub(crate) fn diagnostic() -> Self {
         Self::new(None)
     }
@@ -163,6 +180,7 @@ impl ItemStateStore {
     fn new(assets: Option<Arc<RuntimeEntityAssets>>) -> Self {
         let registry = built_in_registry(assets.as_deref());
         let mut store = Self {
+            presentation_generation: Arc::new(()),
             assets,
             registry,
             facts: inventory::SessionItemFacts::default(),
@@ -241,6 +259,7 @@ impl ItemStateStore {
 
     #[cfg(test)]
     pub(crate) fn clear(&mut self) {
+        self.presentation_generation = Arc::new(());
         self.registry.clear();
         self.armor.clear();
         self.clear_actor_state();
@@ -255,7 +274,9 @@ impl ItemStateStore {
     }
 
     pub(crate) fn remove(&mut self, lifetime: ActorLifetimeId) {
-        self.equipment.retain(|(actor, _), _| *actor != lifetime);
+        for hand in HANDS {
+            self.equipment.remove(&(lifetime, hand));
+        }
         self.pending.retain(|(actor, _)| *actor != lifetime);
         if self.persistent_armor_runtime != Some(lifetime.runtime_id) {
             self.armor.remove(&lifetime.runtime_id);
@@ -477,7 +498,7 @@ impl ItemStateStore {
     }
 
     pub(crate) fn get(&self, lifetime: ActorLifetimeId) -> Option<&ActorEquipmentSnapshot> {
-        [ActorHandedness::Left, ActorHandedness::Right]
+        HANDS
             .into_iter()
             .filter_map(|hand| self.get_in_hand(lifetime, hand))
             .max_by_key(|equipment| equipment.event.ingress_sequence)

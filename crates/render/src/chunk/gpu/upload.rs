@@ -5,6 +5,10 @@ use render_scene::{
     ChunkUploadBudget, RuntimeStageProfiler,
 };
 mod arena_writes;
+#[allow(
+    dead_code,
+    reason = "the word-vector encoder serves chunk regression tests"
+)]
 mod lighting;
 #[cfg(test)]
 mod liquid_tests;
@@ -27,9 +31,11 @@ pub(in crate::chunk) struct ChunkInstanceQueries<'w, 's> {
 #[derive(SystemParam)]
 pub(in crate::chunk) struct ChunkUploadPublication<'w> {
     acknowledgements: Res<'w, ChunkUploadAcknowledgements>,
+    textures: Option<Res<'w, ChunkGpuTextureAssets>>,
     gpu_removals: Res<'w, ChunkGpuRemovalQueue>,
     terrain_generations:
         Option<ResMut<'w, crate::dropped_item_render::terrain_items::TerrainItemMeshGenerations>>,
+    coverage: Option<ResMut<'w, crate::chunk::TerrainCoverage>>,
 }
 #[allow(clippy::too_many_arguments)]
 pub(in crate::chunk) fn prepare_gpu_chunks(
@@ -47,14 +53,17 @@ pub(in crate::chunk) fn prepare_gpu_chunks(
     upload_queue: TerrainUploadQueue,
     retirement_fence: Res<TransparentRetirementFence>,
     mut fairness: ResMut<GpuUpdateFairness>,
+    mut writes: Local<ArenaWrites>,
     profiler: Option<Res<RuntimeStageProfiler>>,
 ) {
     #[cfg(feature = "tracy")]
     let _span = bevy::log::info_span!("prepare_gpu_chunks").entered();
     let ChunkUploadPublication {
         acknowledgements,
+        textures,
         gpu_removals,
         mut terrain_generations,
+        mut coverage,
     } = publication;
     let _timer = profiler
         .as_deref()
@@ -110,6 +119,9 @@ pub(in crate::chunk) fn prepare_gpu_chunks(
     );
 
     for entity in removed_instances.read() {
+        if let Some(coverage) = coverage.as_deref_mut() {
+            coverage.invalidate();
+        }
         arena.pending_removals.insert(entity);
         // Stop drawing immediately; GPU ranges retire behind their completion fence.
         if let Ok(mut entity) = commands.get_entity(entity) {
@@ -124,7 +136,19 @@ pub(in crate::chunk) fn prepare_gpu_chunks(
         terrain_generations.as_deref_mut(),
     );
 
-    let mut writes = ArenaWrites::default();
+    // A selected CPU atlas can outlive a session reset. Keep old draw tables coherent,
+    // while the physical-removal and completion-fence work above continues to drain.
+    if textures.as_ref().is_some_and(|textures| {
+        textures
+            .prepared
+            .as_ref()
+            .is_none_or(|prepared| prepared.identity != texture_assets.identity())
+    }) {
+        fairness.recover_untracked = true;
+        *upload_stats = ChunkGpuUploadStats::default();
+        return;
+    }
+
     let mut applied_tokens = Vec::new();
     let mut applied_publication_permits = Vec::new();
     let mut successful_updates = Vec::new();
@@ -292,9 +316,9 @@ pub(in crate::chunk) fn prepare_gpu_chunks(
             .filter(|_| !fallback_biome)
             .and_then(|old| old.reusable_biome(&instance.biome));
         let biome_words = if fallback_biome || kept_biome.is_some() {
-            Vec::new()
+            &[][..]
         } else {
-            instance.biome.words().to_vec()
+            instance.biome.words()
         };
         let biome_required = match u32::try_from(biome_words.len()) {
             Ok(required) => required,
@@ -500,46 +524,6 @@ pub(in crate::chunk) fn prepare_gpu_chunks(
         let quad_range = cube_range
             .clone()
             .unwrap_or(plan.quad_start..plan.quad_start);
-        let words = instance
-            .cube_quads
-            .iter()
-            .map(PackedQuad::words)
-            .collect::<Vec<_>>();
-        let mut model_words = instance
-            .model_refs
-            .iter()
-            .copied()
-            .map(PackedModelRef::words)
-            .collect::<Vec<_>>();
-        absolutize_model_lighting_bases(&mut model_words, plan.model_lighting_start);
-        let model_lighting_words = packed_lighting_records(&instance.model_lighting);
-        let mut model_draw_words = instance
-            .model_draw_refs
-            .iter()
-            .copied()
-            .map(PackedModelDrawRef::words)
-            .collect::<Vec<_>>();
-        let mut transparent_model_draw_words = instance
-            .transparent_model_draw_refs
-            .iter()
-            .copied()
-            .map(PackedModelDrawRef::words)
-            .collect::<Vec<_>>();
-        absolutize_partitioned_model_draw_refs(
-            &mut model_draw_words,
-            &mut transparent_model_draw_words,
-            plan.model_start,
-        )
-        .expect("validated model draw refs and atomic arena plan fit absolute addressing");
-        let mut liquid_words = instance
-            .liquid_quads
-            .iter()
-            .copied()
-            .map(PackedLiquidQuad::words)
-            .collect::<Vec<_>>();
-        stamp_liquid_metadata_index(&mut liquid_words, metadata_index);
-        let liquid_lighting_words = packed_lighting_records(&instance.liquid_lighting);
-        let cube_lighting_words = packed_lighting_records(&instance.cube_lighting);
         let origin = gpu_chunk_origin(
             instance.origin,
             biome_range.start,
@@ -549,29 +533,7 @@ pub(in crate::chunk) fn prepare_gpu_chunks(
             plan.liquid_lighting_start,
         )
         .expect("aligned arena layout and bounded biome offset produce a valid origin record");
-        writes.quads.push((plan.quad_start, words));
-        writes.model.push((plan.model_start, model_words));
-        writes
-            .model_lighting
-            .push((plan.model_lighting_start, model_lighting_words));
-        writes
-            .model_draw
-            .push((plan.model_draw_start, model_draw_words));
-        writes.transparent_model_draw.push((
-            plan.transparent_model_draw_start,
-            transparent_model_draw_words,
-        ));
-        writes.liquid.push((plan.liquid_start, liquid_words));
-        writes
-            .liquid_lighting
-            .push((plan.liquid_lighting_start, liquid_lighting_words));
-        writes
-            .cube_lighting
-            .push((plan.cube_lighting_start, cube_lighting_words));
-        if !biome_words.is_empty() {
-            writes.biome.push((plan.biome_start, biome_words));
-        }
-        writes.origins.push((metadata_index, origin));
+        writes.collect_chunk(instance, &plan, metadata_index, biome_words, origin);
         // Ice and other transparent models interleave with the water's own face order.
         let order_independent_liquid = instance.has_transparent_liquid
             && transparent_model_draw_range.is_none()
@@ -607,6 +569,9 @@ pub(in crate::chunk) fn prepare_gpu_chunks(
             metadata_index,
         };
         commands.entity(entity).insert(gpu.clone());
+        if let Some(coverage) = coverage.as_deref_mut() {
+            coverage.publish_full(instance.key, instance.generation);
+        }
         arena.transparent_liquids.record(entity, &gpu);
         arena.allocations.insert(
             entity,

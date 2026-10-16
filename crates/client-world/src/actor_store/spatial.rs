@@ -4,9 +4,20 @@ use super::*;
 use protocol_ids::ActorDataKey;
 
 /// Collision dimensions retain a small positive extent after server scaling.
-const MIN_COLLISION_DIMENSION: f32 = 0.005;
+pub(super) const MIN_COLLISION_DIMENSION: f32 = 0.005;
 
 impl ActorSnapshot {
+    /// Bounds for movement use constructor dimensions when the server omits them.
+    pub(super) fn movement_collision_bounds(&self) -> Option<ActorCollisionBounds> {
+        self.bounding_box_with_defaults(
+            self.position,
+            self.entity_fact.collision.unwrap_or([
+                DEFAULT_ACTOR_COLLISION_WIDTH,
+                DEFAULT_ACTOR_COLLISION_HEIGHT,
+            ]),
+        )
+    }
+
     /// Uses the synced collision flag when supplied, otherwise the default definition.
     #[must_use]
     pub fn is_collidable(&self) -> bool {
@@ -68,28 +79,37 @@ impl ActorSnapshot {
                 std::array::from_fn(|axis| position[axis] + half[axis]),
             ));
         }
-        let player = matches!(self.kind, ActorKind::Player { .. });
-        let dimension = |key, default| match self.metadata.get(&key) {
-            Some(ActorMetadataValue::Float(value)) if value.is_finite() => Some(*value),
-            Some(ActorMetadataValue::Float(_)) => player.then_some(default),
-            _ => Some(default),
-        };
-        let scale = match self.metadata.get(&ActorDataKey::Scale.wire_value()) {
-            Some(ActorMetadataValue::Float(value)) => *value,
-            _ => 1.0,
-        };
-        let width = dimension(ActorDataKey::Width.wire_value(), defaults[0])? * scale;
-        let height = dimension(ActorDataKey::Height.wire_value(), defaults[1])? * scale;
-        if !width.is_finite() || !height.is_finite() {
-            return None;
-        }
-        let half_width = width.max(MIN_COLLISION_DIMENSION) * 0.5;
-        let height = height.max(MIN_COLLISION_DIMENSION);
+        let width = self.scaled_collision_dimension(ActorDataKey::Width, defaults[0])?;
+        let height = self.scaled_collision_dimension(ActorDataKey::Height, defaults[1])?;
+        let half_width = width * 0.5;
         let [x, y, z] = position;
         Some((
             [x - half_width, y, z - half_width],
             [x + half_width, y + height, z + half_width],
         ))
+    }
+
+    /// Applies server scale and the collision minimum to one dimension, independently of position.
+    pub(super) fn scaled_collision_dimension(
+        &self,
+        key: ActorDataKey,
+        default: f32,
+    ) -> Option<f32> {
+        let dimension = match self.metadata.get(&key.wire_value()) {
+            Some(ActorMetadataValue::Float(value)) if value.is_finite() => *value,
+            Some(ActorMetadataValue::Float(_)) => {
+                matches!(self.kind, ActorKind::Player { .. }).then_some(default)?
+            }
+            _ => default,
+        };
+        let scale = match self.metadata.get(&ActorDataKey::Scale.wire_value()) {
+            Some(ActorMetadataValue::Float(value)) => *value,
+            _ => 1.0,
+        };
+        let scaled = dimension * scale;
+        scaled
+            .is_finite()
+            .then_some(scaled.max(MIN_COLLISION_DIMENSION))
     }
 
     /// Interaction boxes at the actor's current pose.
@@ -168,27 +188,15 @@ impl ActorSnapshot {
 }
 
 impl ActorStore {
-    /// Visits solid actor bounds in stable runtime order, excluding the mover and its mount.
-    pub(crate) fn movement_colliders(
+    /// Shares solid bounds in stable runtime order, excluding the mover and its current mount.
+    pub(crate) fn movement_collider_snapshot(
         &self,
         mover: u64,
         rider: i64,
-    ) -> impl Iterator<Item = ([f32; 3], [f32; 3])> + '_ {
-        let mount = self.ridden_unique_id(rider);
+    ) -> std::sync::Arc<[ActorCollisionBounds]> {
         self.effect_members
             .collidable
-            .iter()
-            .filter_map(|runtime| self.actors.get(runtime))
-            .filter(move |actor| actor.runtime_id != mover && Some(actor.unique_id) != mount)
-            .filter_map(|actor| {
-                actor.bounding_box_with_defaults(
-                    actor.position,
-                    actor.entity_fact.collision.unwrap_or([
-                        DEFAULT_ACTOR_COLLISION_WIDTH,
-                        DEFAULT_ACTOR_COLLISION_HEIGHT,
-                    ]),
-                )
-            })
+            .snapshot(mover, self.ridden_unique_id(rider))
     }
 }
 
