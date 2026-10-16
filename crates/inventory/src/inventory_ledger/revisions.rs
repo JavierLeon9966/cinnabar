@@ -217,7 +217,8 @@ mod tests {
             storage_item: None,
         });
         ledger.apply(&event);
-        let from = protocol::VerifiedNetworkItemStack::try_new(original, [0; 32]).unwrap();
+        let digest = original.nbt_digest;
+        let from = protocol::VerifiedNetworkItemStack::try_new(original, digest).unwrap();
         let change =
             protocol::writable_book_init_change(&from, protocol::next_legacy_request_id().unwrap())
                 .unwrap();
