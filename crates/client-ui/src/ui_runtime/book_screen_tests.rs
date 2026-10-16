@@ -15,6 +15,9 @@ fn held_book() -> (player_state::PlayerState, UiRuntime) {
         .unwrap()
         .network_id;
     let ledger = player.inventory.ledger_mut();
+    ledger.apply(&protocol::InventoryEvent::Authority(
+        protocol::InventoryAuthority::Server,
+    ));
     ledger.apply_registry(&protocol::ItemRegistryEvent { entries });
     ledger.apply(&protocol::InventoryEvent::Content(
         protocol::InventoryContentEvent {

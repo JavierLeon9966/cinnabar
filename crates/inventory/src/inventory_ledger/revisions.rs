@@ -195,6 +195,9 @@ mod tests {
         protocol::PredictedSlotChange,
     ) {
         let mut ledger = PlayerInventoryLedger::default();
+        ledger.apply(&InventoryEvent::Authority(
+            protocol::InventoryAuthority::Server,
+        ));
         let entries = protocol::vanilla_item_registry();
         let network_id = entries
             .iter()
