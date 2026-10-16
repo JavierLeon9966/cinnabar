@@ -131,9 +131,6 @@ pub struct ItemUseRuntime {
     )>,
     /// A rejected release still precedes the next use, even if Use is pressed again.
     release_pending: bool,
-    /// A writable book without server pages was observed; its next air use
-    /// carries the empty `pages` list BDS requires before `BookEdit`.
-    book_init_armed: bool,
     crossbows: crossbow::CrossbowPredictions,
     /// Launch retained only after the release transaction was admitted.
     riptide_launch: Option<RiptideLaunch>,
@@ -262,15 +259,9 @@ impl ItemUseRuntime {
         }
     }
 
-    /// Arms the empty-pages init for the next air use of a fresh writable book.
-    pub fn observe_book_init(&mut self, needs_init: bool) {
-        self.book_init_armed = needs_init;
-    }
-
     /// Screens, focus loss and spectator mode cancel queued clicks, but accepted uses release.
     pub fn cancel_pending_input(&mut self) {
         self.latched_press = false;
-        self.book_init_armed = false;
         self.repeat_armed = false;
         self.deferred_selection = None;
         self.rejected_swing_tick = None;
@@ -297,8 +288,6 @@ impl ItemUseRuntime {
         self.cooldowns.clear();
         self.predicted = None;
         self.inventory_change = None;
-        self.release_pending = false;
-        self.book_init_armed = false;
         self.crossbows.clear();
     }
 
@@ -501,15 +490,6 @@ impl ItemUseRuntime {
             }
             Some(AirUse::GlideRocket) if frame.ready => swung = true,
             _ => {}
-        }
-        let book_init = std::mem::take(&mut self.book_init_armed);
-        if change.is_none()
-            && book_init
-            && air_use.is_none()
-            && let Some(init) =
-                protocol::writable_book_init_change(&selection.item, legacy_request_id)
-        {
-            change = Some(init);
         }
         let inventory_change = change.as_ref().and_then(|change| {
             frame
