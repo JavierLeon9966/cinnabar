@@ -18,7 +18,7 @@ fn inventory_harness(identifier: &str) -> Harness {
     h.app
         .insert_resource(network)
         .insert_resource(movement)
-        .insert_non_send_resource(captured);
+        .insert_non_send(captured);
     h.app.add_systems(
         Update,
         drive_world_inventory_keys
