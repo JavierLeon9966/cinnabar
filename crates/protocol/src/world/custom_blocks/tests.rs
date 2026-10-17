@@ -789,6 +789,78 @@ fn connection_trait_group_expands_to_sixteen_states() {
     );
 }
 
+/// Integer connection flags admit cardinal states through the retained definition.
+#[test]
+fn integer_connection_flags_materialize_cardinal_states() {
+    for (flags, expected) in [(0, 1), (1, 16), (2, 1), (256, 1), (257, 16), (-1, 16)] {
+        for kind in [0, 1] {
+            let root = compound(vec![(
+                "traits",
+                Nbt::List(vec![compound(vec![
+                    ("name", text("minecraft:connection")),
+                    ("type", Nbt::Int(kind)),
+                    ("enabled_states", Nbt::Int(flags)),
+                    ("update_flags", Nbt::Int(0)),
+                ])]),
+            )]);
+            let definition = super::parse_definition(&root).unwrap();
+            assert_eq!(
+                definition.state_count, expected,
+                "mask {flags}, type {kind}"
+            );
+            assert!(!definition.visual.state_identity_incomplete);
+        }
+    }
+}
+
+/// Independently authored network bytes preserve the integer connection flags.
+#[test]
+fn integer_connection_flags_survive_network_admission() {
+    for (flags, expected) in [(0_u8, 1), (1, 16)] {
+        let mut wire = named(10, "");
+        wire.extend(named(9, "traits"));
+        wire.extend([10, 2]);
+        wire.extend(named(8, "name"));
+        wire.extend(string("minecraft:connection"));
+        for (name, value) in [
+            ("type", 0),
+            ("enabled_states", flags * 2),
+            ("update_flags", 0),
+        ] {
+            wire.extend(named(3, name));
+            wire.push(value);
+        }
+        wire.extend([0, 0]);
+        let blocks = super::CustomBlocks::from_definitions([("test:fence", wire.as_slice())]);
+        assert_eq!(blocks.skipped, 0);
+        assert_eq!(blocks.total_states(), expected);
+        assert_eq!(
+            blocks.blocks[0].visual.state_axes.len(),
+            if flags == 0 { 0 } else { 4 }
+        );
+    }
+}
+
+/// Numeric masks from another trait do not create connection axes.
+#[test]
+fn integer_connection_flags_require_the_connection_trait_identity() {
+    let root = compound(vec![(
+        "traits",
+        Nbt::List(vec![compound(vec![
+            ("name", text("minecraft:placement_direction")),
+            ("enabled_states", Nbt::Int(1)),
+        ])]),
+    )]);
+    let definition = super::parse_definition(&root).unwrap();
+    assert!(
+        definition
+            .visual
+            .state_axes
+            .iter()
+            .all(|axis| !axis.name.starts_with("minecraft:connection_"))
+    );
+}
+
 // Individually enabled directions expand the same way as the group state.
 #[test]
 fn individually_enabled_connection_directions_expand_to_axes() {

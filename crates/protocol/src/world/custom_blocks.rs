@@ -518,12 +518,7 @@ fn parse_definition(root: &Nbt) -> Option<Definition> {
     let enabled = root
         .list("traits")
         .iter()
-        .flat_map(|trait_| {
-            trait_
-                .field("enabled_states")
-                .map(enabled_flags)
-                .unwrap_or_default()
-        })
+        .flat_map(enabled_flags)
         .collect::<Vec<_>>();
     // Trait states come first, in vanilla's fixed order, whatever order the traits are listed in.
     for (name, values) in TRAIT_STATES {
@@ -791,9 +786,22 @@ fn state_value(value: &Nbt) -> Option<CustomStateValue> {
     }
 }
 
-fn enabled_flags(value: &Nbt) -> Vec<String> {
-    match value {
-        Nbt::Compound(fields) => fields
+/// Retains named flags and reads the connection trait's serialized cardinal bit.
+fn enabled_flags(trait_: &Nbt) -> Vec<String> {
+    match trait_.field("enabled_states") {
+        Some(Nbt::Int(flags))
+            if trait_
+                .field("name")
+                .and_then(Nbt::as_str)
+                .is_some_and(|name| trait_key(name) == "connection") =>
+        {
+            if flags & 1 != 0 {
+                vec![CARDINAL_CONNECTIONS.to_owned()]
+            } else {
+                Vec::new()
+            }
+        }
+        Some(Nbt::Compound(fields)) => fields
             .iter()
             .filter(|(_, value)| value.number().is_some_and(|flag| flag != 0.0))
             .map(|(key, _)| key.clone())
