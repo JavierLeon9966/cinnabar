@@ -197,9 +197,8 @@ impl GameModeCapabilities {
 
 /// Whether the spectator ability layer grants Flying.
 ///
-/// Only the last layer with `SPECTATOR_LAYER_TYPE` that defines the Flying bit
-/// decides; other layers and undefined bits never force flight. Unavailable
-/// evidence never forces flight.
+/// Only the final layer with `SPECTATOR_LAYER_TYPE` decides. Its Flying bit
+/// must be both defined and enabled; unavailable evidence never forces flight.
 pub fn spectator_layer_flying(update: &AbilitiesUpdate) -> bool {
     let AbilityLayersEvidence::Received(layers) = &update.layers else {
         return false;
@@ -207,10 +206,10 @@ pub fn spectator_layer_flying(update: &AbilitiesUpdate) -> bool {
     layers
         .iter()
         .rev()
-        .find(|layer| {
-            layer.layer_type == SPECTATOR_LAYER_TYPE && layer.abilities & ability_bit::FLYING != 0
+        .find(|layer| layer.layer_type == SPECTATOR_LAYER_TYPE)
+        .is_some_and(|layer| {
+            layer.abilities & ability_bit::FLYING != 0 && layer.values & ability_bit::FLYING != 0
         })
-        .is_some_and(|layer| layer.values & ability_bit::FLYING != 0)
 }
 
 /// Resolves a boolean using the same typed layers as float abilities.

@@ -255,6 +255,24 @@ fn spectator_flight_needs_the_bit_defined_and_enabled_in_layer_two() {
     assert!(!GameModeCapabilities::resolve(Survival, Some(&repeated)).spectator_flight);
 }
 
+/// Replacing a spectator layer can remove its Flying definition completely.
+#[test]
+fn spectator_layer_replacement_can_remove_flying_definition() {
+    let mut grant = layer(ability_bit::FLYING, ability_bit::FLYING);
+    grant.layer_type = super::SPECTATOR_LAYER_TYPE;
+    let replacement = AbilityLayerEvidence {
+        abilities: 0,
+        ..grant
+    };
+    let abilities = update(vec![grant, replacement]);
+    let caps = GameModeCapabilities::resolve(Survival, Some(&abilities));
+    assert!(!caps.flying, "the effective layer no longer defines Flying");
+    assert!(
+        !caps.spectator_flight,
+        "a replaced grant must not continue forcing spectator flight"
+    );
+}
+
 /// The native creative route is selected by game type, not Instabuild.
 #[test]
 fn instant_destruction_follows_mode_even_when_instabuild_disagrees() {
