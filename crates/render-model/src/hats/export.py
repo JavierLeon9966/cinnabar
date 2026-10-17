@@ -37,7 +37,14 @@ def export(project):
             element = elements[child]
             if element['type'] == 'cube':
                 cube = {'origin': element['from'], 'size': [element['to'][i]-element['from'][i] for i in range(3)], 'uv': {}}
+                if any(element.get('rotation', [0, 0, 0])):
+                    cube['pivot'] = element['origin']
+                    cube['rotation'] = element['rotation']
+                if element.get('inflate'):
+                    cube['inflate'] = element['inflate']
                 for face, value in element['faces'].items():
+                    if 'texture' in value and value['texture'] is None:
+                        continue
                     uv = value['uv']
                     cube['uv'][face] = {'uv': uv[:2], 'uv_size': [uv[2]-uv[0], uv[3]-uv[1]]}
                 bone.setdefault('cubes', []).append(cube)
@@ -69,6 +76,29 @@ def export(project):
     }, 'bones': bones}]}
 
 
+def export_animations(project):
+    """Export numeric linear position/rotation timelines in the runtime's authored axes."""
+    clips = {}
+    for animation in project.get('animations', []):
+        bones = {}
+        for animator in animation['animators'].values():
+            channels = {}
+            for frame in animator.get('keyframes', []):
+                if frame['channel'] not in ('rotation', 'position') or frame['interpolation'] != 'linear':
+                    raise ValueError('Cosmetic clips require linear position or rotation keys')
+                if len(frame['data_points']) != 1:
+                    raise ValueError('Cosmetic keys require one numeric data point')
+                values = [float(frame['data_points'][0][axis]) for axis in 'xyz']
+                if not all(math.isfinite(value) for value in values):
+                    raise ValueError('Cosmetic key values must be finite')
+                channels.setdefault(frame['channel'], {})[str(frame['time'])] = values
+            if channels:
+                bones[animator['name']] = channels
+        clips[animation['name']] = {'loop': animation['loop'] == 'loop',
+                                    'animation_length': animation['length'], 'bones': bones}
+    return clips
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('project', nargs='?', default='bunny_ears', help='Blockbench project name or path')
@@ -78,3 +108,9 @@ if __name__ == '__main__':
     source = name if name.is_absolute() else ROOT / name
     project = json.loads(source.read_text())
     source.with_suffix('.geo.json').write_text(json.dumps(export(project), separators=(',', ':')) + '\n')
+
+    if project.get('animations'):
+        destination = source.with_suffix('.animation.json')
+        definition = json.loads(destination.read_text()) if destination.exists() else {}
+        definition['animations'] = export_animations(project)
+        destination.write_text(json.dumps(definition, separators=(',', ':')) + '\n')

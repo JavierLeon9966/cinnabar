@@ -39,6 +39,7 @@ pub use enhanced::EnhancedRenderPlugin;
 pub use entity_shadow_render::EntityShadowRenderPlugin;
 mod far_terrain;
 pub use far_terrain::FarTerrainRenderPlugin;
+mod gpu_allocation;
 mod gpu_timing;
 pub use gpu_timing::{DetailedGpuTiming, GpuTimingPlugin};
 
@@ -118,6 +119,10 @@ pub use actor_render::ActorRenderPlugin;
 #[cfg(feature = "publication-test-support")]
 pub use actor_render::equipment_test_support::{
     EquipmentPreparation, PreparedEquipmentDraw, equipment_pixels,
+};
+#[cfg(feature = "publication-test-support")]
+pub use actor_render::publication_test_support::{
+    PublicationActorPreparation, publication_actor_preparation,
 };
 
 pub use atmosphere_render::AtmospherePlugin;

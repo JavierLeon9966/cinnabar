@@ -3,10 +3,30 @@
 The wardrobe uses a fetched, ETag-cached catalog with namespaced item IDs and independent
 head, back, face, body, pet and aura slots. Geometry, textures and optional joint motion
 are loaded from bounded, SHA-256-checked assets. The catalog includes original bunny
-ears, the crown and rigid red devil horns; editable artwork and export conformance
+ears, the crown, rigid red devil horns, animated back-slot dragon wings and a pet-slot
+shoulder parrot, plus studio headphones and a halo (head), pixel shades and a kitsune
+mask (face), morpho wings and an ember jetpack (back), a fox tail and a knit scarf (body),
+a bee buddy (pet) and an amethyst orbit (aura); editable artwork and export conformance
 tests remain available.
+The parrot stays in Cosmetics, with its existing pet slot exposed by the category filter.
 Each attachment follows its declared bone and offset. World and HUD share local motion.
+Bounded transform clips and continuous span flex animate wings alongside independent hats.
+An optional intro and delayed repeating clip sequence animate the parrot flying in once
+and changing shoulders, using shared immutable geometry and caller-owned time.
 Unknown, unsupported and unowned items render nothing.
+Items flagged `render_flags.emissive` draw their opaque texels fullbright in the world through
+the emissive-alpha actor material; previews keep the authored texture. Animation files may
+declare up to eight particle emitters on authored bones. Their effects are registered under
+client-owned identifiers and may draw original 16x16 sprites cut from the item's own texture.
+They follow the posed bone and stop when the item is unequipped, hidden or despawned.
+Emitters run only in the world, with at most 128 alive at once; HUD and wardrobe previews show
+geometry without particles.
+
+The Cosmetics gallery offers All, Head, Face, Back, Body, Pet and Aura choices, one per schema
+slot, through a filter icon beside
+Remove all. Its menu closes on selection, outside click or Escape. Filtering preserves equipped
+items, retains separate scroll positions and limits thumbnails and keyboard navigation
+to the selected category.
 
 Saved hat choices migrate into the head slot. Gallery requests include visible thumbnails
 and prioritize equipped textures. Cosmetic motion retains the hand rasters, and unchanged
@@ -308,13 +328,17 @@ consent and runs headless first-run preparation; the NativeActivity then runs th
 the install layout under the app's private files. Gameplay touch controls are a built-in JSON-UI
 screen whose painted rectangles capture fingers; inventory and server forms take one finger as
 the pointer. The Android workflow builds the APK for Android packaging changes, on a schedule
-and on demand.
+and on demand. Tagged Beta and nightly releases also publish a release-profile APK with a
+persistent signing key and release checksums; Android installs updates through the APK installer.
+APKs compile the shared product icon into their launcher resources. Android 11+ relaunches offer
+copyable diagnostics after an unexpected process exit.
 
 Incomplete: the touch layout, its sizes, the look gain and the stick behaviour are provisional,
 not matched to the native touch schemes, safe areas or settings. There is no keyboard or IME,
 Back routing, clipboard, browser links, local worlds, Microsoft sign-in background service,
 menu touch scrolling or touch-mode form scrolling. Device frames, audio, suspend and resume,
 and performance have no Android acceptance. No parity gate closes here.
+Reported exits after resource setup on Galaxy S21 remain undiagnosed; device acceptance is open.
 
 ## Runtime terrain bindings
 
@@ -352,11 +376,19 @@ verification. No parity gate closes here.
 
 ## Launcher updates
 
-One client per install owns update checks, Beta/Nightly/Stable channel selection, explicit Restart and
-update / Later actions, and a separate default-off install-on-quit preference. Signed manifests
+Windows runtime executables carry `asInvoker` manifests and refuse elevated game, core and
+crash-monitor startup or relaunch. Setup does not launch the game, and MSI Restart Manager
+relaunch is disabled. The machine-wide install identity and custom install folders remain supported.
+
+One client per install owns update checks, Beta/Nightly/Stable channel selection, a compact corner
+card with an explicit Restart and update or Download update button, and a separate default-off
+install-on-quit preference. Signed manifests
 carry monotonic build numbers, and digest-named partial downloads resume with HTTP ranges.
 An offline Rust helper waits for the old process, applies the verified native package, and
 restores failed macOS/Linux starts. Read-only installs offer the manual download action.
+Windows uses this helper even without direct write rights: Windows Installer handles any
+administrator authorization after shutdown, and the helper owns the client relaunch.
+Manual Windows downloads open their folder so they cannot start an installer over a running client.
 Each launch checks once startup completes; the fallback poll runs every six hours, and a Cinnabar
 API release notice for the selected channel checks immediately.
 
@@ -366,8 +398,9 @@ publication number, then SemVer prerelease precedence. An unavailable or invalid
 leaves nightly usable. Cached offers and retained stages use the same order to prevent automatic
 downgrades when the winning publishing channel changes. Beta remains the default channel.
 
-Incomplete: CI must compile and run the written regression tests on all platforms. The package
-workflow publishes each channel's signed manifest. The `CINNABAR_UPDATE_SIGNING_KEY` secret in
+Incomplete: CI must compile and run the written regression tests on all platforms. A real Windows
+check must confirm permission consent, installation and one relaunch. The package workflow
+publishes each channel's signed manifest. The `CINNABAR_UPDATE_SIGNING_KEY` secret in
 the protected `release` environment and the `UPDATE_TRUSTED_KEYS` repository variable are
 configured. The first signed publication remains pending.
 The launcher owner must review the notice screenshots before merge.
@@ -436,6 +469,12 @@ use/place/mine/melee/pick, block selection, world-dependent camera publication a
 cursor focus remain in `app`. They still combine world, transport, menu and
 extension state at the app boundary. Existing tests remain with their owning code;
 compilation, test execution and the behavior/performance acceptance gates remain unverified.
+
+Entity-hover reports use the retained primary actor pick shared with attacks. Local
+ticks report a changed actor or held item before movement, and leaving the actor
+sends a positionless clear. Unchanged targets do not generate repeated reports.
+Remote actor motion shares completed local ticks and fractional progress during prediction;
+otherwise it uses the client frame elapsed cap.
 
 ## Client runtime ownership
 
@@ -821,6 +860,10 @@ screen-effect parity remain incomplete.
   differing DPI. Native offscreen validation covers nonzero small attachments.
 - The reported unfocused macOS startup panic remains incomplete until a matching
   headless startup capture reproduces it. No native parity or frame-budget gate closes.
+- Frame waits read the current focus policy after frame work, so focus restoration
+  removes the background limit before that frame waits. Background and occlusion
+  limits stay unchanged. Deterministic regression coverage exercises both rendering
+  paths; native focus-transition latency and the reported resize lag remain unverified.
 
 ## Graphics API startup recovery
 
@@ -995,8 +1038,11 @@ screen-effect parity remain incomplete.
   bindings keep their physical codes. Provisional: keys not yet observed use physical names;
   startup layout lookup and live AZERTY acceptance remain incomplete.
 - Home, Pause, Play, Inbox, world creation, Accounts and confirmation dialogs use shared OreUI
-  panels and controls. Home keeps the shipped title above Play and character cards, with compact
-  utility actions and versions from their canonical sources. Commerce actions remain quiet.
+  panels and controls. Home keeps the shipped title above translucent, top-aligned Play and character
+  cards. Account access stays in the footer, Realms keeps its original text link, and the utility
+  buttons retain their original widths, account icon and red Quit action. Compact menus use a centred column whose
+  width stays proportional to its controls. The footer retains the original Minecraft version and
+  protocol wording. Versions use their canonical sources.
   Home fits short windows without scrolling; Pause scales its controls when needed. Geometry
   regressions are written; CI and owner visual acceptance of the sizing change remain pending.
 - Persistent Dark Mode defaults off, updates immediately and strengthens backdrop dimming.
@@ -1088,6 +1134,14 @@ screen-effect parity remain incomplete.
   Korean and Chinese labels, intact artwork, working modal Cancel and confirmed shutdown.
 
 ## Movement and input audit fixes
+
+Ability updates retain the winning Flying value and its local-change authority
+independently of NoClip. Collision bypass uses the selected travel physics and
+survives correction replay. Higher fixed flight denials prevent local re-entry;
+NoClip alone grants no hunger or sprint exemption. Incomplete: matched trajectories,
+outgoing flight requests, hunger/sprint contexts, unloaded terrain, mounted movement
+and complete block-contact behavior still need acceptance; these changes do not close
+a movement parity gate.
 
 Server-enabled flight also remains active in ordinary modes without MayFly;
 that permission still controls starting flight locally. A native Android
@@ -1486,6 +1540,8 @@ not close a parity or visual acceptance gate.
   clocks through swaps, authored first-person rigs retain ownership, and raster depth stays
   one sixteenth at any texture size. Emote skin layers follow the sampled body pose.
   Unchanged render layers sharing geometry retain their own completed pose allocations.
+  Held-item hand routing uses the owner's admitted definition, so rejected pack bows
+  retain the startup bow's Java placement in both views.
 - Focused regression suites and touched-crate checks pass. Windows/DX12 headless captures
   exercise held-item swaps, use, both third-person views, cape motion and local emotes.
 - Incomplete: swimming, crawling, gliding, sleeping and emoting stay vanilla (Java 1.7 has
@@ -1622,6 +1678,11 @@ not close a parity or visual acceptance gate.
 
 ## Worn server-pack armour textures
 
+- Item bindings retain owner-specific attachables and evaluate their item conditions
+  against the wearer. A stand-only chestplate or pair of leggings leaves players
+  using their own definition. Custom armour bones retain their authored pose, and
+  controller-selected geometry and visibility reach the worn draw. Skin visibility
+  masks are applied after equipment attachment so hiding a torso does not hide its armour.
 - Worn armour from server packs runs its attachable scripts with the wearer as
   `context.owning_entity` and draws the texture its render controller selects,
   such as owner-driven team variants. Each worn slot keeps its own retained state
@@ -1630,9 +1691,16 @@ not close a parity or visual acceptance gate.
   remain available to owner queries when the body pose is static.
   Attachable timing is independent of owner tick batching, and elytra scripts
   receive the actual render delta.
-- Incomplete: worn armour still uses the binding's default geometry on remapped
-  body bones. Attachable animations and controller-selected geometry or
-  materials are not applied, and vanilla armour keeps its static binding.
+- Cape composition retains the chest route used by the equipment draw. First-person
+  hand placement and drawing share one admitted definition, and preview atlas fallback
+  retains its startup choice and category. Predicate cache warming cannot change a
+  routing decision within those compositions. The routing table includes budget
+  exhaustion and armour-stand helmet and chest slots.
+- Incomplete: matching body bones still use the owner's pose without the attachable's
+  own animation channels. Worn bone-binding expressions, multiple armour material
+  groups, trim artwork, modern controller materials, and precedence among overlapping
+  owner mappings remain incomplete. Native humanoid models absent from the
+  resource pack still use the existing static player-model fallback.
 
 ## Tip text slot
 
@@ -2185,6 +2253,11 @@ keeps its own binding.
   online roster.
 - Compact centered columns, bounded to 80 players with an explicit overflow count.
 - Roster changes refresh cached JSON-UI; binding release, focus loss and menus hide it.
+- Each name has its skin's front face and hat layer, with the runtime Steve skin for
+  missing or unsupported portraits. UUID-based skin updates refresh cached portraits;
+  stock, legacy, HD, custom cube UVs and static first-frame face animations are supported.
+  Rotated or otherwise unsupported head geometry uses the fallback. This is a
+  user-requested extension; native Bedrock parity and performance acceptance remain incomplete.
 - Input, rendered collection, focus/release, roster refresh and cache tests passed.
 - Incomplete live Windows acceptance: installed-client Tab capture pending.
 
@@ -3896,6 +3969,12 @@ are authored but unrun at the user's request. Native
 `#item_name_text_offset` controller binding remains
 incomplete; this correction preserves the approved built-in pack geometry.
 
+Legacy lowercase `scalex`, `scaley` and `scalez` scripts use the same compiled scale
+programs as the modern spellings. Malformed optional values retain their counted
+fallback. The grown wither now uses its authored scale in the matched local fixture.
+Incomplete: native precedence when both spellings are supplied and the
+remaining wither spawn, armor and death behavior still need matched verification.
+
 Sulfur-cube body and shell material aliases retain their cutout and blended states.
 The pinned adult and baby shell rasters preserve fractional opacity through actor
 carrier admission. Incomplete: absorbed-block scale and attachment placement remain
@@ -4073,6 +4152,14 @@ range bypass and playback offset, camera preset starting rotation, dimension
 default biome, SetPlayerFurnaceOptions, RecordStarted); that parity work is
 incomplete. The account/auth cache is keyed on the game version, so the first
 join re-authenticates.
+
+Item-use request builders now carry an explicit logical hand through standalone
+transactions and embedded PlayerAuthInput block interactions. Offhand requests
+use transaction slot zero and retain the caller-supplied authoritative stack.
+Independent byte tests cover both hands, stack identity and the following fields.
+This is a request/builder foundation: gameplay still selects the main hotbar hand.
+Offhand gameplay selection, predicted inventory changes, item release and exact
+stable-target gameplay acceptance remain incomplete. Full inventory parity is open.
 
 2026-09-09 loading publication: the owner authorized publishing the completed
 loading/auth work; the broader track and unused solver experiments remain paused.
@@ -7254,6 +7341,12 @@ Source-water, source-lava, and powder-snow collection were observed against a
 local Bedrock server. Waterlogged-source acceptance remains unverified; this does
 not close the interaction parity gate.
 
+Dynamic container registry cleanup retires only matching retained bundle contents
+through the session inventory FIFO. Other containers and item stacks stay intact,
+and cleanup frees capacity for subsequent dynamic containers. Focused wire and
+ledger tests cover cleanup, ID reuse, retention pressure and session reset;
+exact stable-client gameplay validation and full inventory parity remain incomplete.
+
 Middle-click picking includes mobs and paintings, and asks the server for the
 nearest eligible actor's item using its persistent ID. Mob spawn eggs remain
 server-authoritative; walls, reach, and mounted-actor exclusion still constrain
@@ -8245,9 +8338,10 @@ hotbar, retaining the inherited Bedrock label and animation. Bare block stacks
 can split/restack without rejecting nonzero block identity; ingredient plainness
 no longer requires zero aux/block identity. Supported recipe shapes are retained
 independently of discovery metadata, including high-bit result block identities.
-Personal/workbench closes explicitly return crafting inputs and cursor items to
-player inventory, dropping only overflow, with sparse dependency preservation
-and rejected-return recovery. References and scoped acceptance are in
+Personal/workbench closes explicitly return crafting inputs, and all storage
+closes return cursor items to player inventory, dropping only overflow, with
+sparse dependency preservation and rejected-return recovery. References and
+scoped acceptance are in
 `docs/reference/selected-item-hud-label.md`, `inventory-block-restacking.md`,
 `inventory-recipe-admission.md` and `inventory-crafting-close.md`.
 
@@ -8261,6 +8355,11 @@ Full structural-NBT merge parity, descriptor-dependent capacity/variant rules,
 limited-crafting/unlocked-recipe client gating, recipe-book discovery state,
 arbitrary container return flags and exact native close/flush timing remain open.
 These corrections do not close the overall Phase 5 inventory parity gate.
+
+Storage-close regressions cover empty/full player inventories, pending/accepted
+takes, both close-acknowledgement orders, inactive personal inputs, and later inventory gestures. The
+close-with-cursor lock is reproduced in the owning ledger. Live kit-server
+acceptance and an overflow-only trigger remain unverified.
 
 Incremental recipe replacements now retire obsolete station and multi-recipe
 views. Station inputs outside the supported slot counts, or with quantities

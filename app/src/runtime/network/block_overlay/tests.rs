@@ -166,6 +166,7 @@ fn materials(texture: &str) -> Option<Box<[CustomMaterialInstance]>> {
 fn block(name: &str, state_count: u32, visual: CustomBlockVisuals) -> CustomBlock {
     CustomBlock {
         state_physics: Default::default(),
+        player_interact: false,
         name: name.into(),
         tags: Default::default(),
         state_count,

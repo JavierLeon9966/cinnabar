@@ -78,8 +78,14 @@ fn forward_wind_folds_only_the_upper_half_behind_the_head_at_every_orientation()
         Quat::from_rotation_y(1.3),
         Quat::from_rotation_x(-0.4),
     ] {
-        let rest = model.pose(head(rotation), 0.0);
-        let folded = model.pose(head(rotation), 1.0);
+        let rest = model.pose(head(rotation), Motion::default());
+        let folded = model.pose(
+            head(rotation),
+            Motion {
+                bend: 1.0,
+                ..Default::default()
+            },
+        );
         for (index, weight) in model.flex.iter().enumerate() {
             if *weight == 0.0 {
                 assert_eq!(rest[index], folded[index]);
@@ -132,13 +138,20 @@ fn settled_headwear_reuses_its_pose_and_retains_head_scale() {
     let mut cache = HatPoseCache::default();
     let mut head = head(Quat::IDENTITY);
     head.translation_scale[3] = 0.5;
-    let first = cache.pose(fixture::bunny(), head, 0.0);
-    let second = cache.pose(fixture::bunny(), head, 0.0);
+    let first = cache.pose(fixture::bunny(), head, Motion::default());
+    let second = cache.pose(fixture::bunny(), head, Motion::default());
     assert!(Arc::ptr_eq(&first, &second));
     for bone in &*first {
         assert_eq!(bone.translation_scale[3], 0.5);
     }
-    let changed = cache.pose(fixture::bunny(), head, 0.5);
+    let changed = cache.pose(
+        fixture::bunny(),
+        head,
+        Motion {
+            bend: 0.5,
+            ..Default::default()
+        },
+    );
     assert!(!Arc::ptr_eq(&first, &changed));
 }
 
@@ -146,7 +159,13 @@ fn settled_headwear_reuses_its_pose_and_retains_head_scale() {
 fn shared_surface_edges_stay_welded_and_joint_angles_form_a_curve() {
     let model = rig(fixture::bunny());
     for bend in [0.0, 0.5, 1.0] {
-        let pose = model.pose(head(Quat::IDENTITY), bend);
+        let pose = model.pose(
+            head(Quat::IDENTITY),
+            Motion {
+                bend,
+                ..Default::default()
+            },
+        );
         let mut shared = std::collections::HashMap::<[u32; 3], Vec3>::new();
         let mut duplicate_corners = 0;
         for vertex in &*model.geometry.vertices {
@@ -182,6 +201,14 @@ fn shared_surface_edges_stay_welded_and_joint_angles_form_a_curve() {
 fn blockbench_project_and_runtime_export_share_the_same_surface_and_joint_pivots() {
     for (project, geometry) in [
         (
+            include_str!("shoulder_parrot.bbmodel"),
+            include_str!("shoulder_parrot.geo.json"),
+        ),
+        (
+            include_str!("dragon_wings.bbmodel"),
+            include_str!("dragon_wings.geo.json"),
+        ),
+        (
             include_str!("bunny_ears.bbmodel"),
             include_str!("bunny_ears.geo.json"),
         ),
@@ -192,6 +219,43 @@ fn blockbench_project_and_runtime_export_share_the_same_surface_and_joint_pivots
         (
             include_str!("devil_horns.bbmodel"),
             include_str!("devil_horns.geo.json"),
+        ),
+        (
+            include_str!("fox_tail.bbmodel"),
+            include_str!("fox_tail.geo.json"),
+        ),
+        (
+            include_str!("pixel_shades.bbmodel"),
+            include_str!("pixel_shades.geo.json"),
+        ),
+        (
+            include_str!("bee_buddy.bbmodel"),
+            include_str!("bee_buddy.geo.json"),
+        ),
+        (
+            include_str!("morpho_wings.bbmodel"),
+            include_str!("morpho_wings.geo.json"),
+        ),
+        (
+            include_str!("knit_scarf.bbmodel"),
+            include_str!("knit_scarf.geo.json"),
+        ),
+        (
+            include_str!("kitsune_mask.bbmodel"),
+            include_str!("kitsune_mask.geo.json"),
+        ),
+        (
+            include_str!("studio_headphones.bbmodel"),
+            include_str!("studio_headphones.geo.json"),
+        ),
+        (include_str!("halo.bbmodel"), include_str!("halo.geo.json")),
+        (
+            include_str!("ember_jetpack.bbmodel"),
+            include_str!("ember_jetpack.geo.json"),
+        ),
+        (
+            include_str!("amethyst_orbit.bbmodel"),
+            include_str!("amethyst_orbit.geo.json"),
         ),
     ] {
         let project: serde_json::Value = serde_json::from_str(project).unwrap();
@@ -217,6 +281,59 @@ fn blockbench_project_and_runtime_export_share_the_same_surface_and_joint_pivots
                 .find(|bone| bone["name"] == group["name"])
                 .expect("exported project joint");
             assert_eq!(bone["pivot"], group["origin"]);
+        }
+        let cubes: Vec<_> = geometry["bones"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|bone| bone["cubes"].as_array().cloned().unwrap_or_default())
+            .collect();
+        for cube in project["elements"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|element| element["type"] == "cube")
+        {
+            let from = cube["from"].as_array().unwrap();
+            let size: Vec<f64> = (0..3)
+                .map(|axis| cube["to"][axis].as_f64().unwrap() - from[axis].as_f64().unwrap())
+                .collect();
+            let rotated = cube["rotation"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|n| n.as_f64() != Some(0.0));
+            // Repeated parts share origins and sizes, so a cube matches only with all its faces.
+            let matches = |candidate: &&serde_json::Value| {
+                candidate["origin"] == cube["from"]
+                    && (0..3).all(|axis| {
+                        (candidate["size"][axis].as_f64().unwrap() - size[axis]).abs() < 1e-9
+                    })
+                    && (!rotated
+                        || (candidate["rotation"] == cube["rotation"]
+                            && candidate["pivot"] == cube["origin"]))
+                    && cube["faces"]
+                        .as_object()
+                        .unwrap()
+                        .iter()
+                        .all(|(name, face)| {
+                            let uv = face["uv"].as_array().unwrap();
+                            if face["texture"].is_null() {
+                                return candidate["uv"].get(name).is_none();
+                            }
+                            let corner = |i: usize| uv[i].as_f64().unwrap();
+                            let exported = &candidate["uv"][name];
+                            exported["uv"] == serde_json::json!([uv[0], uv[1]])
+                                && [
+                                    exported["uv_size"][0].as_f64(),
+                                    exported["uv_size"][1].as_f64(),
+                                ] == [Some(corner(2) - corner(0)), Some(corner(3) - corner(1))]
+                        })
+            };
+            assert!(
+                cubes.iter().any(|candidate| matches(&candidate)),
+                "Blockbench cubes, transforms and face UVs must be exported together"
+            );
         }
         for mesh in project["elements"]
             .as_array()
@@ -252,7 +369,7 @@ fn blockbench_project_and_runtime_export_share_the_same_surface_and_joint_pivots
                 })
                 .expect("runtime surface matches the editable Blockbench mesh");
             let positions = surface["positions"].as_array().unwrap();
-            assert!(positions.len() > 100);
+            assert!(!positions.is_empty());
             assert_eq!(
                 surface["polys"].as_array().unwrap().len(),
                 mesh["faces"].as_object().unwrap().len()
@@ -298,7 +415,7 @@ fn admits_new_identifiers_slots_offsets_and_render_flags_without_code_changes() 
         rig(item).geometry.vertices.len(),
         rig(first).geometry.vertices.len() * 2
     );
-    let posed = rig(item).pose(head(Quat::IDENTITY), 0.0);
+    let posed = rig(item).pose(head(Quat::IDENTITY), Motion::default());
     assert!((posed[0].translation_scale[0] - 0.25).abs() < 1e-5);
     assert_eq!(Item::from_id(item.id()), Some(item));
 }
@@ -359,7 +476,7 @@ fn catalog_geometry_keeps_authored_rotations_at_a_different_attachment_bone() {
         include_bytes!("fixture/animation.json"),
     )
     .unwrap();
-    let pose = rig(item).pose(head(Quat::IDENTITY), 0.0);
+    let pose = rig(item).pose(head(Quat::IDENTITY), Motion::default());
     assert!(
         rig(item)
             .rest_vertices
@@ -410,8 +527,54 @@ fn catalog_devil_horns_attach_directly_to_the_head_and_stay_rigid() {
         "no band joins the two horns"
     );
     let attachment = head(Quat::from_rotation_y(0.8));
-    assert_eq!(*model.pose(attachment, 0.0), *model.pose(attachment, 1.0));
+    assert_eq!(
+        *model.pose(attachment, Motion::default()),
+        *model.pose(
+            attachment,
+            Motion {
+                bend: 1.0,
+                ..Default::default()
+            }
+        )
+    );
     let preview = thumbnail::render(item, 128, 128).unwrap();
+    assert!(
+        preview
+            .rgba8
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|pixel| pixel[3] > 0)
+    );
+}
+
+#[test]
+fn shoulder_parrot_sits_on_the_shoulder_and_coexists_with_head_and_back_slots() {
+    let pet = fixture::shoulder_parrot();
+    let model = rig(pet);
+    assert_eq!(pet.descriptor().slot, "pet");
+    assert_eq!(pet.descriptor().attachment_bone, "body");
+    assert!(pet.descriptor().free);
+    assert!(
+        model
+            .rest_vertices
+            .iter()
+            .all(|v| v.position[0] > 0.25 && v.position[1] < 2.0)
+    );
+    assert!(
+        model
+            .rest_vertices
+            .iter()
+            .any(|v| (v.position[1] - 1.5).abs() < 1e-6),
+        "feet touch the standard shoulder plane"
+    );
+    let slots = [fixture::devil_horns(), fixture::dragon_wings(), pet]
+        .map(|item| (item.descriptor().slot.clone(), Some(item.id().into())))
+        .into();
+    let resolved = cosmetics::resolve(&slots, |_| false);
+    assert_eq!(resolved.len(), 3);
+    assert!(resolved.contains(&pet));
+    let preview = thumbnail::render(pet, 128, 128).unwrap();
     assert!(
         preview
             .rgba8
