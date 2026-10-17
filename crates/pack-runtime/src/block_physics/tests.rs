@@ -455,6 +455,7 @@ fn connection_states_select_per_state_collision() {
     };
     let block = CustomBlock {
         state_physics: Default::default(),
+        player_interact: false,
         name: "test:fence".into(),
         tags: Default::default(),
         state_count: 16,
