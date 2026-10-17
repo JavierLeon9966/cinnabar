@@ -1,6 +1,9 @@
 use protocol::{AbilitiesUpdate, AbilityLayerEvidence, AbilityLayersEvidence};
 
-use super::{CREATIVE_ATTACK_REACH, GameModeCapabilities, SURVIVAL_ATTACK_REACH, ability_bit};
+use super::{
+    CREATIVE_ATTACK_REACH, FlightAuthority, GameModeCapabilities, SURVIVAL_ATTACK_REACH,
+    ability_bit,
+};
 use protocol::PlayerGameMode::{Adventure, Creative, Spectator, Survival, Unknown};
 
 /// Builds one received base ability layer.
@@ -33,7 +36,7 @@ fn mode_defaults_follow_the_gamemode_table() {
     assert!(survival.can_use_switches && survival.can_open_containers);
     assert!(!survival.can_fly && !survival.creative_inventory && !survival.instant_break);
     assert!(!survival.invulnerable && survival.visible && survival.has_collision);
-    assert!(!survival.spectator_flight);
+    assert!(matches!(survival.flight, FlightAuthority::Mutable(_)));
     assert_eq!(survival.attack_reach, SURVIVAL_ATTACK_REACH);
     assert!(!survival.creative_reach);
 
@@ -41,7 +44,7 @@ fn mode_defaults_follow_the_gamemode_table() {
     assert!(creative.can_build && creative.can_mine && creative.can_attack);
     assert!(creative.can_fly && creative.creative_inventory && creative.instant_break);
     assert!(creative.invulnerable && creative.visible && creative.has_collision);
-    assert!(!creative.spectator_flight);
+    assert!(matches!(creative.flight, FlightAuthority::Mutable(_)));
     assert_eq!(creative.attack_reach, CREATIVE_ATTACK_REACH);
     assert!(creative.creative_reach);
 
@@ -53,23 +56,23 @@ fn mode_defaults_follow_the_gamemode_table() {
     assert!(adventure.can_use_switches && adventure.can_open_containers && adventure.can_attack);
     assert!(!adventure.can_fly && !adventure.instant_break && !adventure.invulnerable);
     assert!(adventure.visible && adventure.has_collision);
-    assert!(!adventure.spectator_flight);
+    assert!(matches!(adventure.flight, FlightAuthority::Mutable(_)));
     assert_eq!(adventure.attack_reach, SURVIVAL_ATTACK_REACH);
 
     let spectator = GameModeCapabilities::for_mode(Spectator);
     assert!(!spectator.can_use_blocks() && !spectator.can_mine && !spectator.can_attack);
     assert!(!spectator.can_use_items, "spectators cannot use held items");
     assert!(survival.can_use_items && creative.can_use_items && adventure.can_use_items);
-    assert!(!spectator.can_fly && spectator.flying && spectator.invulnerable);
+    assert!(!spectator.can_fly && spectator.flight.is_flying() && spectator.invulnerable);
     assert!(!spectator.visible && !spectator.has_collision);
-    assert!(spectator.spectator_flight);
+    assert_eq!(spectator.flight, FlightAuthority::Fixed(true));
     assert_eq!(spectator.attack_reach, 0.0);
 
     // An unrecognized id interacts like vanilla's base game mode instead of failing closed.
     let unknown = GameModeCapabilities::for_mode(Unknown);
     assert!(unknown.can_use_blocks() && unknown.can_mine && unknown.can_attack);
     assert!(unknown.can_use_items && !unknown.can_fly);
-    assert!(!unknown.spectator_flight);
+    assert!(matches!(unknown.flight, FlightAuthority::Mutable(_)));
     assert_eq!(unknown.attack_reach, survival.attack_reach);
 }
 
@@ -94,9 +97,9 @@ fn spectator_mode_suppresses_stale_build_and_flight_toggle_permissions() {
     let base = update(vec![layer(u32::MAX, u32::MAX)]);
     let caps = GameModeCapabilities::resolve(Spectator, Some(&base));
     assert!(!caps.can_use_blocks() && !caps.can_mine && !caps.can_attack);
-    assert!(caps.flying && !caps.has_collision);
+    assert!(caps.flight.is_flying() && !caps.has_collision);
     assert!(!caps.can_fly, "spectator flight cannot be toggled off");
-    assert!(caps.spectator_flight);
+    assert_eq!(caps.flight, FlightAuthority::Fixed(true));
 }
 
 /// Build and Mine are separate grants; neither implies the other.
@@ -149,22 +152,22 @@ fn ability_bits_refine_flight_and_collision_without_creative_mining() {
         | ability_bit::NO_CLIP;
     let all = update(vec![layer(bits, bits)]);
     let caps = GameModeCapabilities::resolve(Survival, Some(&all));
-    assert!(caps.can_fly && caps.flying && caps.invulnerable);
+    assert!(caps.can_fly && caps.flight.is_flying() && caps.invulnerable);
     assert!(
         !caps.instant_break,
         "Instabuild does not select creative destruction"
     );
     assert!(!caps.has_collision, "no-clip removes collision");
     assert!(
-        !caps.spectator_flight,
-        "base-layer Flying alone does not force spectator flight"
+        matches!(caps.flight, FlightAuthority::Mutable(_)),
+        "base-layer Flying remains locally mutable"
     );
 }
 
 /// Freecam/noclip shape: base grants MayFly|Flying|NoClip, spectator grants Flying.
 /// Both noclip and forced spectator flight apply outside spectator mode.
 #[test]
-fn freecam_packet_shape_forces_noclip_and_spectator_flight() {
+fn freecam_packet_shape_keeps_collision_and_fixed_flight() {
     use super::SPECTATOR_LAYER_TYPE;
     let base_bits = ability_bit::MAY_FLY | ability_bit::FLYING | ability_bit::NO_CLIP;
     let mut base = layer(base_bits, base_bits);
@@ -184,75 +187,42 @@ fn freecam_packet_shape_forces_noclip_and_spectator_flight() {
         layers: AbilityLayersEvidence::Received([base, spectator].into()),
     };
     let caps = GameModeCapabilities::resolve(Survival, Some(&abilities));
-    assert!(caps.can_fly && caps.flying);
+    assert!(caps.can_fly && caps.flight.is_flying());
     assert!(!caps.has_collision, "NoClip ability removes collision");
     assert!(
-        caps.spectator_flight,
-        "spectator-layer Flying forces flight like spectator mode"
+        caps.flight == FlightAuthority::Fixed(true),
+        "a higher Flying grant remains fixed"
     );
 }
 
-/// Only a spectator layer that both defines and enables Flying forces flight.
+/// Defined higher-layer values remain fixed, including explicit false values.
 #[test]
-fn spectator_flight_needs_the_bit_defined_and_enabled_in_layer_two() {
-    use super::{SPECTATOR_LAYER_TYPE, spectator_layer_flying};
-    let spectator = |abilities: u32, values: u32| {
-        let layer = AbilityLayerEvidence {
-            layer_type: SPECTATOR_LAYER_TYPE,
-            abilities,
-            values,
-            fly_speed_bits: 0,
-            vertical_fly_speed_bits: 0,
-            walk_speed_bits: 0,
-        };
-        let update = AbilitiesUpdate {
-            actor_unique_id: 0,
-            player_permission: 1,
-            command_permission: 0,
-            layers: AbilityLayersEvidence::Received([layer].into()),
-        };
-        spectator_layer_flying(&update)
-    };
-    assert!(spectator(ability_bit::FLYING, ability_bit::FLYING));
-    assert!(!spectator(ability_bit::FLYING, 0));
-    assert!(!spectator(0, ability_bit::FLYING));
-    assert!(!spectator_layer_flying(&update(vec![])));
-    let unavailable = AbilitiesUpdate {
-        layers: AbilityLayersEvidence::Unavailable {
-            declared_layers: 99,
-        },
-        ..update(vec![])
-    };
-    assert!(!spectator_layer_flying(&unavailable));
-    // A repeated spectator layer's last definition wins.
-    let repeated = AbilitiesUpdate {
-        actor_unique_id: 0,
-        player_permission: 1,
-        command_permission: 0,
-        layers: AbilityLayersEvidence::Received(
-            [
-                AbilityLayerEvidence {
-                    layer_type: SPECTATOR_LAYER_TYPE,
-                    abilities: ability_bit::FLYING,
-                    values: ability_bit::FLYING,
-                    fly_speed_bits: 0,
-                    vertical_fly_speed_bits: 0,
-                    walk_speed_bits: 0,
-                },
-                AbilityLayerEvidence {
-                    layer_type: SPECTATOR_LAYER_TYPE,
-                    abilities: ability_bit::FLYING,
-                    values: 0,
-                    fly_speed_bits: 0,
-                    vertical_fly_speed_bits: 0,
-                    walk_speed_bits: 0,
-                },
-            ]
-            .into(),
-        ),
-    };
-    assert!(!spectator_layer_flying(&repeated));
-    assert!(!GameModeCapabilities::resolve(Survival, Some(&repeated)).spectator_flight);
+fn higher_flight_authority_retains_value_and_definition() {
+    for kind in super::SPECTATOR_LAYER_TYPE..6 {
+        for flying in [false, true] {
+            let mut higher = layer(
+                ability_bit::FLYING,
+                if flying { ability_bit::FLYING } else { 0 },
+            );
+            higher.layer_type = kind;
+            assert_eq!(
+                GameModeCapabilities::resolve(Survival, Some(&update(vec![higher]))).flight,
+                FlightAuthority::Fixed(flying)
+            );
+            higher.abilities = 0;
+            assert_eq!(
+                GameModeCapabilities::resolve(Survival, Some(&update(vec![higher]))).flight,
+                FlightAuthority::Mutable(false)
+            );
+        }
+    }
+    let mut grant = layer(ability_bit::FLYING, ability_bit::FLYING);
+    grant.layer_type = super::SPECTATOR_LAYER_TYPE;
+    let deny = protocol::AbilityLayerEvidence { values: 0, ..grant };
+    assert_eq!(
+        GameModeCapabilities::resolve(Survival, Some(&update(vec![grant, deny]))).flight,
+        FlightAuthority::Fixed(false)
+    );
 }
 
 /// Replacing a spectator layer can remove its Flying definition completely.
@@ -266,10 +236,13 @@ fn spectator_layer_replacement_can_remove_flying_definition() {
     };
     let abilities = update(vec![grant, replacement]);
     let caps = GameModeCapabilities::resolve(Survival, Some(&abilities));
-    assert!(!caps.flying, "the effective layer no longer defines Flying");
     assert!(
-        !caps.spectator_flight,
-        "a replaced grant must not continue forcing spectator flight"
+        !caps.flight.is_flying(),
+        "the effective layer no longer defines Flying"
+    );
+    assert!(
+        matches!(caps.flight, FlightAuthority::Mutable(_)),
+        "a replaced grant must release its flight authority"
     );
 }
 
@@ -308,4 +281,34 @@ fn review_independent_block_uses_survive_revoked_target_abilities() {
     };
     assert!(caps.can_use_blocks());
     assert!(!GameModeCapabilities::for_mode(Spectator).can_use_blocks());
+}
+
+#[test]
+fn ability_axes_higher_flying_denial_wins() {
+    for kind in 3..=5 {
+        for reverse in [false, true] {
+            let mut spectator = layer(ability_bit::FLYING, ability_bit::FLYING);
+            spectator.layer_type = super::SPECTATOR_LAYER_TYPE;
+            let mut deny = layer(ability_bit::FLYING, 0);
+            deny.layer_type = kind;
+            let mut layers = vec![
+                layer(
+                    ability_bit::MAY_FLY | ability_bit::NO_CLIP,
+                    ability_bit::MAY_FLY,
+                ),
+                spectator,
+                deny,
+            ];
+            if reverse {
+                layers.reverse();
+            }
+            let caps = GameModeCapabilities::resolve(Survival, Some(&update(layers)));
+            assert!(!caps.flight.is_flying());
+            assert!(caps.has_collision);
+            assert!(
+                caps.flight == FlightAuthority::Fixed(false),
+                "higher Flying denial must remain authoritative: layer {kind}"
+            );
+        }
+    }
 }

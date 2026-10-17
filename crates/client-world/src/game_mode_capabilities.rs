@@ -31,6 +31,31 @@ pub mod ability_bit {
 /// `minecraft/protocol/ability.go` (`AbilityLayerTypeSpectator`).
 pub const SPECTATOR_LAYER_TYPE: u16 = 2;
 
+/// Effective server flight and whether local requests may change it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FlightAuthority {
+    /// Ordinary layers permit the local flight toggle.
+    Mutable(bool),
+    /// A higher layer keeps its value across local toggle requests.
+    Fixed(bool),
+}
+
+impl Default for FlightAuthority {
+    fn default() -> Self {
+        Self::Mutable(false)
+    }
+}
+
+impl FlightAuthority {
+    /// Returns the effective server value independently of local requests.
+    #[must_use]
+    pub const fn is_flying(self) -> bool {
+        match self {
+            Self::Mutable(value) | Self::Fixed(value) => value,
+        }
+    }
+}
+
 /// The interaction gates one game mode grants, after server ability overrides.
 ///
 /// `attack_reach` is 0.0 exactly when attacking is disallowed. `creative_reach`
@@ -48,17 +73,13 @@ pub struct GameModeCapabilities {
     pub can_use_items: bool,
     pub can_attack: bool,
     pub can_fly: bool,
-    pub flying: bool,
+    pub flight: FlightAuthority,
     pub creative_inventory: bool,
     /// Creative destruction route, independent of the Instabuild ability.
     pub instant_break: bool,
     pub invulnerable: bool,
     pub visible: bool,
     pub has_collision: bool,
-    /// Spectator-layer Flying forces flight like spectator mode does, even when
-    /// the game mode is not Spectator. Mirrors the freecam/noclip packet shape
-    /// (`base` grants `MayFly|Flying|NoClip`, `spectator` grants `Flying`).
-    pub spectator_flight: bool,
     pub attack_reach: f64,
     pub creative_reach: bool,
 }
@@ -75,13 +96,12 @@ impl GameModeCapabilities {
                 can_use_items: true,
                 can_attack: true,
                 can_fly: false,
-                flying: false,
+                flight: FlightAuthority::Mutable(false),
                 creative_inventory: false,
                 instant_break: false,
                 invulnerable: false,
                 visible: true,
                 has_collision: true,
-                spectator_flight: false,
                 attack_reach: SURVIVAL_ATTACK_REACH,
                 creative_reach: false,
             },
@@ -93,13 +113,12 @@ impl GameModeCapabilities {
                 can_use_items: true,
                 can_attack: true,
                 can_fly: true,
-                flying: false,
+                flight: FlightAuthority::Mutable(false),
                 creative_inventory: true,
                 instant_break: true,
                 invulnerable: true,
                 visible: true,
                 has_collision: true,
-                spectator_flight: false,
                 attack_reach: CREATIVE_ATTACK_REACH,
                 creative_reach: true,
             },
@@ -113,13 +132,12 @@ impl GameModeCapabilities {
                 can_use_items: true,
                 can_attack: true,
                 can_fly: false,
-                flying: false,
+                flight: FlightAuthority::Mutable(false),
                 creative_inventory: false,
                 instant_break: false,
                 invulnerable: false,
                 visible: true,
                 has_collision: true,
-                spectator_flight: false,
                 attack_reach: SURVIVAL_ATTACK_REACH,
                 creative_reach: false,
             },
@@ -131,13 +149,12 @@ impl GameModeCapabilities {
                 can_use_items: false,
                 can_attack: false,
                 can_fly: false,
-                flying: true,
+                flight: FlightAuthority::Fixed(true),
                 creative_inventory: false,
                 instant_break: false,
                 invulnerable: true,
                 visible: false,
                 has_collision: false,
-                spectator_flight: true,
                 attack_reach: 0.0,
                 creative_reach: false,
             },
@@ -177,8 +194,13 @@ impl GameModeCapabilities {
         if let Some(may_fly) = resolved(ability_bit::MAY_FLY) {
             caps.can_fly = may_fly;
         }
-        if let Some(flying) = resolved(ability_bit::FLYING) {
-            caps.flying = flying;
+        if let Some(layer) = resolved_layer(abilities, ability_bit::FLYING) {
+            let flying = layer.values & ability_bit::FLYING != 0;
+            caps.flight = if layer.layer_type >= SPECTATOR_LAYER_TYPE {
+                FlightAuthority::Fixed(flying)
+            } else {
+                FlightAuthority::Mutable(flying)
+            };
         }
         if let Some(invulnerable) = resolved(ability_bit::INVULNERABLE) {
             caps.invulnerable = invulnerable;
@@ -186,30 +208,8 @@ impl GameModeCapabilities {
         if let Some(no_clip) = resolved(ability_bit::NO_CLIP) {
             caps.has_collision = !no_clip;
         }
-        // A spectator-layer Flying grant forces flight like spectator mode,
-        // even when the game mode is not Spectator (freecam/noclip shape).
-        if spectator_layer_flying(abilities) {
-            caps.spectator_flight = true;
-        }
         caps
     }
-}
-
-/// Whether the spectator ability layer grants Flying.
-///
-/// Only the final layer with `SPECTATOR_LAYER_TYPE` decides. Its Flying bit
-/// must be both defined and enabled; unavailable evidence never forces flight.
-pub fn spectator_layer_flying(update: &AbilitiesUpdate) -> bool {
-    let AbilityLayersEvidence::Received(layers) = &update.layers else {
-        return false;
-    };
-    layers
-        .iter()
-        .rev()
-        .find(|layer| layer.layer_type == SPECTATOR_LAYER_TYPE)
-        .is_some_and(|layer| {
-            layer.abilities & ability_bit::FLYING != 0 && layer.values & ability_bit::FLYING != 0
-        })
 }
 
 /// Resolves a boolean using the same typed layers as float abilities.
