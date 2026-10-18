@@ -509,6 +509,7 @@ fn connection_states_select_per_state_collision() {
         components: CustomVisualComponents::default(),
     };
     let block = CustomBlock {
+        state_physics_complete: false,
         state_physics: Default::default(),
         player_interact: false,
         name: "test:fence".into(),
