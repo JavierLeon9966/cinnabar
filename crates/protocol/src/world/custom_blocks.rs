@@ -544,13 +544,16 @@ fn parse_definition(root: &Nbt) -> Option<Definition> {
     let mut state_axes = Vec::new();
     let mut state_identity_incomplete = false;
     let traits = match root.field("traits") {
-        Some(Nbt::List(traits)) => traits.iter().collect::<Vec<_>>(),
-        Some(Nbt::Compound(traits)) => traits.iter().map(|(_, value)| value).collect(),
+        Some(Nbt::List(traits)) => traits.iter().map(|value| (None, value)).collect::<Vec<_>>(),
+        Some(Nbt::Compound(traits)) => traits
+            .iter()
+            .map(|(name, value)| (Some(name.as_str()), value))
+            .collect(),
         _ => Vec::new(),
     };
     let enabled = traits
         .iter()
-        .flat_map(|trait_| enabled_flags(trait_))
+        .flat_map(|(name, trait_)| enabled_flags(trait_, *name))
         .collect::<Vec<_>>();
     // Trait states come first, in vanilla's fixed order, whatever order the traits are listed in.
     for (name, values) in TRAIT_STATES {
@@ -593,7 +596,8 @@ fn parse_definition(root: &Nbt) -> Option<Definition> {
             && key != CARDINAL_CONNECTIONS
             && !CONNECTION_DIRECTIONS.contains(&key)
     });
-    let mut placement = placement::traits(&traits, state_axes.len());
+    let mut placement =
+        placement::traits(traits.iter().map(|(_, trait_)| *trait_), state_axes.len());
     for property in root.list("properties") {
         let values = property.list("enum");
         states = states.checked_mul(values.len().max(1) as u64)?;
@@ -859,13 +863,12 @@ fn state_value(value: &Nbt) -> Option<CustomStateValue> {
     }
 }
 
-/// Reads named states and flags, including the connection trait's serialized cardinal bit.
-fn enabled_flags(trait_: &Nbt) -> Vec<String> {
+/// Reads states and flags using the container key or the trait's own name as its identity.
+fn enabled_flags(trait_: &Nbt, name: Option<&str>) -> Vec<String> {
     match trait_.field("enabled_states") {
         Some(Nbt::Int(flags))
-            if trait_
-                .field("name")
-                .and_then(Nbt::as_str)
+            if name
+                .or_else(|| trait_.field("name").and_then(Nbt::as_str))
                 .is_some_and(|name| trait_key(name) == "connection") =>
         {
             if flags & 1 != 0 {

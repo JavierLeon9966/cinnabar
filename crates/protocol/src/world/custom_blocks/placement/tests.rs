@@ -126,6 +126,14 @@ fn placement_traits_compose_named_states_with_connection_flags() {
             Nbt::List(vec![Nbt::String("minecraft:cardinal_connections".into())]),
             compound([("minecraft:cardinal_connections", Nbt::Byte(1))]),
         ] {
+            let connection = if compound_traits {
+                compound([("enabled_states", connection_states)])
+            } else {
+                compound([
+                    ("name", Nbt::String("minecraft:connection".into())),
+                    ("enabled_states", connection_states),
+                ])
+            };
             let traits = [
                 (
                     "minecraft:placement_direction",
@@ -137,13 +145,7 @@ fn placement_traits_compose_named_states_with_connection_flags() {
                         ("y_rotation_offset", Nbt::Float(90.0)),
                     ]),
                 ),
-                (
-                    "minecraft:connection",
-                    compound([
-                        ("name", Nbt::String("minecraft:connection".into())),
-                        ("enabled_states", connection_states),
-                    ]),
-                ),
+                ("minecraft:connection", connection),
             ];
             let traits = if compound_traits {
                 compound(traits)

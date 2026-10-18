@@ -30,6 +30,7 @@ const DIRECTIONS: [(&str, &str); 4] = [
     ("west_rails", "minecraft:connection_west"),
 ];
 
+/// Builds one boolean axis for each rail direction in the fixture.
 fn connection_axes() -> Box<[CustomStateAxis]> {
     DIRECTIONS
         .iter()
@@ -40,6 +41,7 @@ fn connection_axes() -> Box<[CustomStateAxis]> {
         .collect()
 }
 
+/// Selects the fixture's north and south collision boxes from their connection states.
 fn collision_permuts() -> Box<[protocol::CustomPermutation]> {
     let shift = |direction: &str, boxes: CustomBox| protocol::CustomPermutation {
         physical: CustomPhysicalComponents {
@@ -71,6 +73,7 @@ fn collision_permuts() -> Box<[protocol::CustomPermutation]> {
     ])
 }
 
+/// Builds a fence whose rail visibility and collision depend on its connection states.
 fn fence() -> CustomBlock {
     block(
         "test:fence",
@@ -97,7 +100,7 @@ fn fence() -> CustomBlock {
     )
 }
 
-// Palette bit order matches the axis order: north varies fastest.
+/// Lists the rails hidden by a fixture state whose north connection varies fastest.
 fn hidden_for_state(index: u32) -> Vec<String> {
     DIRECTIONS
         .iter()
