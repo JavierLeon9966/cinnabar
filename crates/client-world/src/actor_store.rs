@@ -409,9 +409,12 @@ impl ActorSnapshot {
         }
     }
 
+    /// Whether this actor's body is hidden. `Invisible` asks for that, and furniture packs pair
+    /// it with `RenderWhenInvisible` to keep a model that only stops taking part in visibility.
     #[must_use]
     pub fn is_invisible(&self) -> bool {
         self.flag(ActorFlag::Invisible.wire_value())
+            && !self.flag(ActorFlag::RenderWhenInvisible.wire_value())
     }
 
     #[must_use]
@@ -960,6 +963,9 @@ mod hitbox_tests;
 
 #[cfg(test)]
 mod movement_flags_tests;
+
+#[cfg(test)]
+mod visibility_tests;
 
 mod display;
 pub use display::{DisplayActorStore, MAX_DISPLAY_ACTORS};
