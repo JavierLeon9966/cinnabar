@@ -8,6 +8,7 @@ use protocol::{ActorEvent, ActorKind, ActorMetadata, ActorMetadataValue};
 
 use super::{ActorStore, tests::spawn};
 
+/// Spawns an entity with both protocol flag words supplied by the caller.
 fn entity_with_flags(store: &mut ActorStore, flags: u64, overflow: u64) {
     let ActorEvent::Spawn(mut event) = spawn(8, 80) else {
         unreachable!();
@@ -31,11 +32,7 @@ fn entity_with_flags(store: &mut ActorStore, flags: u64, overflow: u64) {
 #[test]
 fn an_invisible_actor_is_hidden() {
     let mut store = ActorStore::new(1, 0);
-    entity_with_flags(
-        &mut store,
-        1 << ActorFlag::Invisible.wire_value(),
-        0,
-    );
+    entity_with_flags(&mut store, 1 << ActorFlag::Invisible.wire_value(), 0);
 
     assert!(
         store.get(8).unwrap().is_invisible(),
