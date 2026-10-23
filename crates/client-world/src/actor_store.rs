@@ -409,8 +409,7 @@ impl ActorSnapshot {
         }
     }
 
-    /// Whether this actor's body is hidden. `Invisible` asks for that, and furniture packs pair
-    /// it with `RenderWhenInvisible` to keep a model that only stops taking part in visibility.
+    /// Whether invisibility hides this actor's body after applying its rendering override.
     #[must_use]
     pub fn is_invisible(&self) -> bool {
         self.flag(ActorFlag::Invisible.wire_value())

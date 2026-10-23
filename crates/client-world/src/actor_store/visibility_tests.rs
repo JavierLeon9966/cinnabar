@@ -1,5 +1,4 @@
-//! Visibility follows Bedrock's two flags: `Invisible` hides a body, and `RenderWhenInvisible`
-//! brings it back for actors that keep a model while asking not to be treated as visible.
+//! `Invisible` hides the body unless `RenderWhenInvisible` keeps it in the draw list.
 
 use protocol_ids::{ActorDataKey, ActorFlag};
 use std::sync::Arc;
@@ -36,7 +35,7 @@ fn an_invisible_actor_is_hidden() {
 
     assert!(
         store.get(8).unwrap().is_invisible(),
-        "an actor flagged invisible draws nothing"
+        "invisibility hides the actor's body"
     );
 }
 
